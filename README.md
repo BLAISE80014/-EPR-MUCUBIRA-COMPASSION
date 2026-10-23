@@ -132,8 +132,14 @@ relying on it for recovery.
 
 ## Implementation status
 
-Finance transactions and budgets, department activity modules, dynamic
-department administration, monthly reports and approvals, analytics and file
-exports, notifications, audit-log screens, and organization settings are not
-implemented yet. Their navigation entries remain unavailable or show module
-availability messaging; no mock business data is presented as live data.
+The Director workspace now includes a responsive application shell, a live
+department overview based on staff roles, and dedicated routes for budgets,
+monthly reports, analytics, notifications, and audit logs. The available
+backend data sources remain staff accounts, savings-group directory records,
+and the role-scoped organization summary. Finance transactions, health-service
+activity, report submissions, notification records, audit events, dynamic
+department administration, and file exports are not implemented by the API.
+Those screens clearly identify the missing data sources instead of showing
+sample records as live data. Account settings currently display the signed-in
+user's own profile and persist the color-theme preference locally; profile and
+organization edits are not supported.

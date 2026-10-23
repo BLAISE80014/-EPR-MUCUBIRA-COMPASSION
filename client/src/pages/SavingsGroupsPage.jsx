@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Check, CirclePlus, PiggyBank, UserRoundX } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { CirclePlus, PiggyBank, RefreshCw, UserRoundX } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { FormField } from '../components/FormField'
+import { InlineLoading, SkeletonTable } from '../components/LoadingStates'
 import { apiRequest } from '../lib/api'
 
 function formatDate(value) {
@@ -12,11 +14,15 @@ export function SavingsGroupsPage() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const submissionLock = useRef(false)
   const canManage = user.role === 'director'
 
   async function loadGroups(signal) {
@@ -36,24 +42,44 @@ export function SavingsGroupsPage() {
     const controller = new AbortController()
     loadGroups(controller.signal)
     return () => controller.abort()
-  }, [])
+  }, [refreshKey])
 
   async function handleCreate(event) {
     event.preventDefault()
+    if (submissionLock.current) return
     setFormError('')
+    setSuccessMessage('')
+    const trimmedName = name.trim()
+    const trimmedCode = code.trim().toUpperCase()
+    const nextErrors = {}
+    if (trimmedName.length < 2 || trimmedName.length > 120) {
+      nextErrors.name = 'Enter a group name between 2 and 120 characters.'
+    }
+    if (!/^[A-Z0-9_-]{2,32}$/.test(trimmedCode)) {
+      nextErrors.code = 'Use 2–32 letters, numbers, hyphens, or underscores.'
+    }
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors)
+      return
+    }
+    setFieldErrors({})
+    submissionLock.current = true
     setSaving(true)
     try {
       const response = await apiRequest('/api/savings-groups', {
         method: 'POST',
-        body: { name, code },
+        body: { name: trimmedName, code: trimmedCode },
       })
       setGroups((old) => [...old, response.group].sort((a, b) => a.name.localeCompare(b.name)))
       setName('')
       setCode('')
       setCreating(false)
+      setFieldErrors({})
+      setSuccessMessage('Saving group created successfully.')
     } catch (requestError) {
       setFormError(requestError.message)
     } finally {
+      submissionLock.current = false
       setSaving(false)
     }
   }
@@ -80,7 +106,7 @@ export function SavingsGroupsPage() {
       <section className="page-header">
         <div>
           <p className="eyebrow">Savings group management</p>
-          <h1>{user.role === 'savings_group_manager' ? 'Assigned Savings Groups' : 'Savings Groups'}</h1>
+          <h1>{user.role === 'savings_group_manager' ? 'Assigned Saving Groups' : 'Saving Group'}</h1>
           <p className="page-description">
             {user.role === 'savings_group_manager'
               ? 'This list is limited to the groups assigned to your account.'
@@ -88,31 +114,60 @@ export function SavingsGroupsPage() {
           </p>
         </div>
         {canManage && (
-          <button className="primary-btn" type="button" onClick={() => { setCreating((value) => !value); setFormError('') }}>
+          <button className="primary-btn" type="button" onClick={() => {
+            setCreating((value) => !value)
+            setFormError('')
+            setFieldErrors({})
+            setSuccessMessage('')
+          }}>
             <CirclePlus size={16} />
             {creating ? 'Close form' : 'Add savings group'}
           </button>
         )}
       </section>
 
-      {error && <p className="form-alert" role="alert">{error}</p>}
+      {error && (
+        <div className="form-alert form-alert--with-action" role="alert">
+          <span>{error}</span>
+          <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)}>
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
+        </div>
+      )}
+      {successMessage && <p className="form-success" role="status">{successMessage}</p>}
 
       {creating && canManage && (
-        <form className="panel group-create-form" onSubmit={handleCreate}>
+        <form className="panel group-create-form" onSubmit={handleCreate} noValidate>
           <div>
             <p className="eyebrow">New group</p>
             <h3>Register a savings group</h3>
+            <p className="form-intro">Add the group name and a short unique identifier for staff to recognize.</p>
           </div>
           {formError && <p className="form-alert" role="alert">{formError}</p>}
-          <label>
-            Group name
-            <input value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={120} required />
-          </label>
-          <label>
-            Unique group ID
-            <input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} minLength={2} maxLength={32} pattern="[A-Za-z0-9_-]+" required />
-          </label>
-          <button className="primary-btn" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Create group'}</button>
+          <FormField id="group-name" label="Group name" required hint="Use the name recognized by your community." error={fieldErrors.name}>
+            {(attrs) => <input {...attrs} value={name} onChange={(event) => {
+              setName(event.target.value)
+              setFieldErrors((old) => ({ ...old, name: '' }))
+              setFormError('')
+            }} placeholder="e.g. Abizeranye Savings Group" maxLength={120} />}
+          </FormField>
+          <FormField id="group-code" label="Unique group ID" required hint="2–32 letters, numbers, hyphens, or underscores." error={fieldErrors.code}>
+            {(attrs) => <input {...attrs} value={code} onChange={(event) => {
+              setCode(event.target.value.toUpperCase())
+              setFieldErrors((old) => ({ ...old, code: '' }))
+              setFormError('')
+            }} placeholder="e.g. ABZ-001" maxLength={32} />}
+          </FormField>
+          <div className="form-actions">
+            <button className="secondary-btn" type="button" onClick={() => {
+              setCreating(false)
+              setFormError('')
+              setFieldErrors({})
+            }} disabled={saving}>Cancel</button>
+            <button className="primary-btn" type="submit" disabled={saving}>
+              {saving ? <><span className="button-spinner" aria-hidden="true" />Creating…</> : 'Create group'}
+            </button>
+          </div>
         </form>
       )}
 
@@ -122,14 +177,25 @@ export function SavingsGroupsPage() {
             <p className="eyebrow">{groups.length} active {groups.length === 1 ? 'group' : 'groups'}</p>
             <h3>Registered savings groups</h3>
           </div>
+          <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
+            <RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true" />
+            Refresh
+          </button>
         </div>
-        {loading ? <p className="empty-state">Loading savings groups…</p> : groups.length === 0 ? (
+        {loading && groups.length === 0 ? <SkeletonTable columns={canManage ? 5 : 4} label="Loading savings groups" /> : error && groups.length === 0 ? (
+          <div className="empty-state">
+            <strong>Savings groups are unavailable</strong>
+            <span>Retry the request to load available groups.</span>
+          </div>
+        ) : groups.length === 0 ? (
           <div className="empty-state">
             <PiggyBank size={22} />
             <strong>No active savings groups</strong>
             <span>{canManage ? 'Create a group before assigning Savings Group Managers.' : 'No groups are currently assigned to your account.'}</span>
           </div>
         ) : (
+          <>
+          {loading && <div className="section-refreshing"><InlineLoading>Refreshing savings groups…</InlineLoading></div>}
           <div className="table-scroll">
             <table>
               <thead>
@@ -158,6 +224,7 @@ export function SavingsGroupsPage() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
     </>

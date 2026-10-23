@@ -1,8 +1,11 @@
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { AppLayout } from './components/AppLayout'
+import { AppLoadingError, AppLoadingScreen } from './components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from './auth/roleRoutes'
 import { DashboardPage } from './pages/DashboardPage'
+import { DepartmentPage, DirectorModulePage, SettingsPage } from './pages/DirectorModulePage'
 import { LoginPage } from './pages/LoginPage'
 import { MemberDashboardPage } from './pages/MemberDashboardPage'
 import { ParentDashboardPage } from './pages/ParentDashboardPage'
@@ -11,11 +14,25 @@ import { SignupPage } from './pages/SignupPage'
 import { StaffPage } from './pages/StaffPage'
 import { ThemeProvider } from './theme/ThemeProvider'
 
+const MINIMUM_STARTUP_DURATION_MS = 4000
+
 function ProtectedRoutes() {
-  const { user, loading } = useAuth()
+  const { user, loading, sessionError, retrySession } = useAuth()
+  const navigate = useNavigate()
 
   if (loading) {
-    return <main className="loading-page" aria-live="polite">Loading your session…</main>
+    return <AppLoadingScreen message="Checking your session..." />
+  }
+
+  if (sessionError) {
+    return (
+      <AppLoadingError
+        message={sessionError}
+        onRetry={retrySession}
+        onLogin={() => navigate('/login', { replace: true })}
+        retrying={loading}
+      />
+    )
   }
 
   if (!user) {
@@ -33,6 +50,13 @@ function RoleRoute({ roles, children }) {
   }
 
   return children
+}
+
+function RoleAwareModulePage({ module }) {
+  const { user } = useAuth()
+  return user.role === 'director'
+    ? <DirectorModulePage module={module} />
+    : <DashboardPage />
 }
 
 function HomeRedirect() {
@@ -63,6 +87,11 @@ function ApplicationRoutes() {
               <DashboardPage />
             </RoleRoute>
           )} />
+          <Route path="departments" element={(
+            <RoleRoute roles={['director']}>
+              <DepartmentPage />
+            </RoleRoute>
+          )} />
           <Route path="member-dashboard" element={(
             <RoleRoute roles={['member']}>
               <MemberDashboardPage />
@@ -75,19 +104,45 @@ function ApplicationRoutes() {
           )} />
           <Route path="accounting" element={(
             <RoleRoute roles={['director', 'accountant']}>
-              <DashboardPage />
+              <RoleAwareModulePage module="accounting" />
             </RoleRoute>
           )} />
           <Route path="health" element={(
             <RoleRoute roles={['director', 'health_officer']}>
-              <DashboardPage />
+              <RoleAwareModulePage module="health" />
             </RoleRoute>
           )} />
           <Route path="communication" element={(
             <RoleRoute roles={['director', 'communication_officer']}>
-              <DashboardPage />
+              <RoleAwareModulePage module="communication" />
             </RoleRoute>
           )} />
+          <Route path="budget" element={(
+            <RoleRoute roles={['director', 'accountant']}>
+              <DirectorModulePage module="budget" />
+            </RoleRoute>
+          )} />
+          <Route path="monthly-reports" element={(
+            <RoleRoute roles={['director', 'accountant', 'health_officer', 'communication_officer', 'savings_group_manager']}>
+              <DirectorModulePage module="monthly-reports" />
+            </RoleRoute>
+          )} />
+          <Route path="reports" element={(
+            <RoleRoute roles={['director', 'accountant']}>
+              <DirectorModulePage module="reports" />
+            </RoleRoute>
+          )} />
+          <Route path="notifications" element={(
+            <RoleRoute roles={['director']}>
+              <DirectorModulePage module="notifications" />
+            </RoleRoute>
+          )} />
+          <Route path="audit-logs" element={(
+            <RoleRoute roles={['director']}>
+              <DirectorModulePage module="audit-logs" />
+            </RoleRoute>
+          )} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route path="staff" element={(
             <RoleRoute roles={['director']}>
               <StaffPage />
@@ -105,12 +160,36 @@ function ApplicationRoutes() {
   )
 }
 
+function SessionInitialization() {
+  const { loading } = useAuth()
+  const [minimumStartupElapsed, setMinimumStartupElapsed] = useState(false)
+
+  useEffect(() => {
+    const startupTimer = window.setTimeout(
+      () => setMinimumStartupElapsed(true),
+      MINIMUM_STARTUP_DURATION_MS,
+    )
+    return () => window.clearTimeout(startupTimer)
+  }, [])
+
+  if (loading || !minimumStartupElapsed) {
+    return (
+      <AppLoadingScreen
+        message="Preparing your workspace..."
+        progressDurationMs={MINIMUM_STARTUP_DURATION_MS}
+      />
+    )
+  }
+
+  return <ApplicationRoutes />
+}
+
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          <ApplicationRoutes />
+          <SessionInitialization />
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

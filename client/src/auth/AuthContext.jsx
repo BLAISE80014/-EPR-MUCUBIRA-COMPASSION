@@ -1,38 +1,79 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { apiRequest } from '../lib/api'
 
 const AuthContext = createContext(null)
+const SESSION_REQUEST_TIMEOUT_MS = 4000
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [sessionError, setSessionError] = useState('')
+  const sessionRequestRef = useRef(null)
+
+  const restoreSession = useCallback(async (signal, didTimeout) => {
+    try {
+      const response = await apiRequest('/api/auth/me', { signal })
+      setUser(response.user)
+      return response.user
+    } catch (error) {
+      if (error.status === 401) {
+        setUser(null)
+        return null
+      }
+      if (!signal.aborted || didTimeout()) {
+        const message = didTimeout()
+          ? 'The server is taking too long to respond. Check that the backend and database are running, then retry.'
+          : error.message
+        setSessionError(message)
+        console.error('Unable to restore the current session:', error)
+      }
+      return null
+    } finally {
+      if (!signal.aborted || didTimeout()) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let timedOut = false
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, SESSION_REQUEST_TIMEOUT_MS)
+    sessionRequestRef.current = controller
+    restoreSession(controller.signal, () => timedOut)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+      if (sessionRequestRef.current === controller) sessionRequestRef.current = null
+    }
+  }, [restoreSession])
+
+  const retrySession = useCallback(async () => {
+    sessionRequestRef.current?.abort()
+    const controller = new AbortController()
+    let timedOut = false
+    setLoading(true)
+    setSessionError('')
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, SESSION_REQUEST_TIMEOUT_MS)
+    sessionRequestRef.current = controller
+    try {
+      await restoreSession(controller.signal, () => timedOut)
+    } finally {
+      window.clearTimeout(timeoutId)
+      if (sessionRequestRef.current === controller) sessionRequestRef.current = null
+    }
+  }, [restoreSession])
 
   const refreshUser = useCallback(async () => {
     const response = await apiRequest('/api/auth/me')
     setUser(response.user)
+    setSessionError('')
     return response.user
-  }, [])
-
-  useEffect(() => {
-    let active = true
-    apiRequest('/api/auth/me')
-      .then((response) => {
-        if (active) {
-          setUser(response.user)
-        }
-      })
-      .catch((error) => {
-        if (active && error.status !== 401 && error.status < 500) {
-          console.error('Unable to restore the current session:', error.message)
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false)
-      })
-
-    return () => {
-      active = false
-    }
   }, [])
 
   const login = useCallback(async (email, password, rememberMe, accountType) => {
@@ -41,6 +82,7 @@ export function AuthProvider({ children }) {
       body: { email, password, rememberMe, accountType },
     })
     setUser(response.user)
+    setSessionError('')
     return response.user
   }, [])
 
@@ -50,22 +92,26 @@ export function AuthProvider({ children }) {
       body: registration,
     })
     setUser(response.user)
+    setSessionError('')
     return response
   }, [])
 
   const logout = useCallback(async () => {
     await apiRequest('/api/auth/logout', { method: 'POST' })
     setUser(null)
+    setSessionError('')
   }, [])
 
   const value = useMemo(() => ({
     user,
     loading,
+    sessionError,
     login,
     register,
     logout,
     refreshUser,
-  }), [user, loading, login, register, logout, refreshUser])
+    retrySession,
+  }), [user, loading, sessionError, login, register, logout, refreshUser, retrySession])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

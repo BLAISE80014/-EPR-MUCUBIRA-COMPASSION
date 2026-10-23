@@ -122,7 +122,7 @@ export function SignupPage() {
           </div>
           <p className="role-guidance">Staff accounts are created by a Director.</p>
 
-          <label htmlFor="signup-name">Full name</label>
+          <label htmlFor="signup-name">Full name <span className="auth-required" aria-hidden="true">*</span></label>
           <div className="auth-input-wrap signup-input-wrap">
             <UserRound size={18} aria-hidden="true" />
             <input
@@ -141,7 +141,7 @@ export function SignupPage() {
           </div>
           {errors.name && <span className="auth-field-error" id="signup-name-error">{errors.name}</span>}
 
-          <label htmlFor="signup-email">Email address</label>
+          <label htmlFor="signup-email">Email address <span className="auth-required" aria-hidden="true">*</span></label>
           <div className="auth-input-wrap signup-input-wrap">
             <Mail size={18} aria-hidden="true" />
             <input
@@ -178,7 +178,7 @@ export function SignupPage() {
           </div>
           {errors.phone && <span className="auth-field-error" id="signup-phone-error">{errors.phone}</span>}
 
-          <label htmlFor="signup-password">Password</label>
+          <label htmlFor="signup-password">Password <span className="auth-required" aria-hidden="true">*</span></label>
           <div className="password-field auth-input-wrap signup-input-wrap">
             <LockKeyhole size={18} aria-hidden="true" />
             <input
@@ -205,7 +205,7 @@ export function SignupPage() {
           </div>
           <p className="password-guidance">Choose your own password. Maximum 72 UTF-8 bytes.</p>
 
-          <label htmlFor="signup-confirm-password">Confirm password</label>
+          <label htmlFor="signup-confirm-password">Confirm password <span className="auth-required" aria-hidden="true">*</span></label>
           <div className="password-field auth-input-wrap signup-input-wrap">
             <LockKeyhole size={18} aria-hidden="true" />
             <input

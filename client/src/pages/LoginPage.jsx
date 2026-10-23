@@ -14,6 +14,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [helpMessage, setHelpMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const submissionLock = useRef(false)
@@ -23,11 +24,17 @@ export function LoginPage() {
   async function handleSubmit(event) {
     event.preventDefault()
     if (submissionLock.current) return
-    if (!accountType || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password) {
-      setError('Choose your account type and enter a valid email address and password.')
+    const errors = {}
+    if (!accountType) errors.accountType = 'Choose your account type.'
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errors.email = 'Enter a valid email address.'
+    if (!password) errors.password = 'Enter your password.'
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      setError('')
       return
     }
     submissionLock.current = true
+    setFieldErrors({})
     setError('')
     setSubmitting(true)
     try {
@@ -56,16 +63,21 @@ export function LoginPage() {
         {helpMessage && <p className="auth-notice" role="status">{helpMessage}</p>}
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
-          <label htmlFor="login-account-type">Account type</label>
-          <div className="auth-input-wrap">
+          <label htmlFor="login-account-type">Account type <span className="auth-required" aria-hidden="true">*</span></label>
+          <div className={`auth-input-wrap${fieldErrors.accountType ? ' auth-input-wrap--invalid' : ''}`}>
             <UserRound size={18} aria-hidden="true" />
             <select
               id="login-account-type"
               name="accountType"
               value={accountType}
-              onChange={(event) => setAccountType(event.target.value)}
+              onChange={(event) => {
+                setAccountType(event.target.value)
+                setFieldErrors((old) => ({ ...old, accountType: '' }))
+              }}
               required
               aria-label="Account type"
+              aria-invalid={Boolean(fieldErrors.accountType)}
+              aria-describedby={fieldErrors.accountType ? 'login-account-type-error' : undefined}
             >
               <option value="">Choose your account type</option>
               <option value="director">Director</option>
@@ -77,8 +89,9 @@ export function LoginPage() {
               <option value="member">Community Member</option>
             </select>
           </div>
-          <label htmlFor="login-email">Email Address</label>
-          <div className="auth-input-wrap">
+          {fieldErrors.accountType && <span className="form-field__error" id="login-account-type-error" role="alert">{fieldErrors.accountType}</span>}
+          <label htmlFor="login-email">Email address <span className="auth-required" aria-hidden="true">*</span></label>
+          <div className={`auth-input-wrap${fieldErrors.email ? ' auth-input-wrap--invalid' : ''}`}>
             <Mail size={18} aria-hidden="true" />
             <input
               autoComplete="username"
@@ -87,13 +100,19 @@ export function LoginPage() {
               type="email"
               placeholder="you@example.com"
               value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value)
+                setFieldErrors((old) => ({ ...old, email: '' }))
+              }}
               maxLength={254}
               required
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
             />
           </div>
-          <label htmlFor="login-password">Password</label>
-          <div className="password-field auth-input-wrap">
+          {fieldErrors.email && <span className="form-field__error" id="login-email-error" role="alert">{fieldErrors.email}</span>}
+          <label htmlFor="login-password">Password <span className="auth-required" aria-hidden="true">*</span></label>
+          <div className={`password-field auth-input-wrap${fieldErrors.password ? ' auth-input-wrap--invalid' : ''}`}>
             <LockKeyhole size={18} aria-hidden="true" />
             <input
               autoComplete="current-password"
@@ -102,14 +121,20 @@ export function LoginPage() {
               type={showPassword ? 'text' : 'password'}
               placeholder="Enter your password"
               value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              onChange={(event) => {
+                setPassword(event.target.value)
+                setFieldErrors((old) => ({ ...old, password: '' }))
+              }}
               maxLength={128}
               required
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
             />
             <button className="password-toggle" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
               {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
             </button>
           </div>
+          {fieldErrors.password && <span className="form-field__error" id="login-password-error" role="alert">{fieldErrors.password}</span>}
           <div className="login-options">
             <label className="remember-option">
               <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
