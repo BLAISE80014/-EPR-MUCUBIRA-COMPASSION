@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Eye, EyeOff, HeartHandshake, LockKeyhole, Mail, Phone, UserPlus, UserRound, UsersRound } from 'lucide-react'
 import { Link, Navigate } from 'react-router-dom'
 import { AuthLayout } from '../components/AuthLayout'
+import { InlineLoading } from '../components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from '../auth/roleRoutes'
 import { useAuth } from '../auth/AuthContext'
 import { useTheme } from '../theme/useTheme'
@@ -241,8 +242,7 @@ export function SignupPage() {
           {errors.termsAccepted && <span className="auth-field-error" id="signup-terms-error">{errors.termsAccepted}</span>}
 
           <button className="primary-btn login-submit" type="submit" disabled={submitting}>
-            <UserPlus size={16} aria-hidden="true" />
-            <span aria-live="polite">{submitting ? t('Submitting request…') : t('Create account')}</span>
+            {submitting ? <InlineLoading>{t('Submitting request…')}</InlineLoading> : <><UserPlus size={16} aria-hidden="true" /><span>{t('Create account')}</span></>}
           </button>
         </form>
 

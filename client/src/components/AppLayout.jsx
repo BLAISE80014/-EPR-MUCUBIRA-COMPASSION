@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { InlineLoading } from './LoadingStates'
 import { ThemeToggle } from './ThemeToggle'
 import { useTheme } from '../theme/useTheme'
 
@@ -105,6 +106,7 @@ export function AppLayout() {
   const [period, setPeriod] = useState(currentPeriod)
   const [search, setSearch] = useState('')
   const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
   const collapsed = preferences.sidebarCollapsed
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -186,13 +188,17 @@ export function AppLayout() {
   )
 
   async function handleLogout() {
+    if (loggingOut) return
     setLogoutError('')
+    setLoggingOut(true)
     try {
       await logout()
       navigate('/login', { replace: true })
     } catch (error) {
       setLogoutError(error.message)
       setProfileOpen(false)
+    } finally {
+      setLoggingOut(false)
     }
   }
 
@@ -398,7 +404,9 @@ export function AppLayout() {
                   </div>
                   <Link to="/settings#profile" role="menuitem" onClick={() => setProfileOpen(false)}><BriefcaseBusiness size={16} />View profile</Link>
                   <Link to="/settings" role="menuitem" onClick={() => setProfileOpen(false)}><Settings size={16} />Account settings</Link>
-                  <button type="button" role="menuitem" onClick={handleLogout}><LogOut size={16} />Log out</button>
+                  <button type="button" role="menuitem" onClick={handleLogout} disabled={loggingOut}>
+                    {loggingOut ? <InlineLoading>{t('Logging out…')}</InlineLoading> : <><LogOut size={16} />{t('Log out')}</>}
+                  </button>
                 </div>
               )}
             </div>

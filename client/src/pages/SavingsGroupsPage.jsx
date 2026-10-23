@@ -16,6 +16,7 @@ export function SavingsGroupsPage() {
   const { t, preferences } = useTheme()
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
+  const [togglingGroupId, setTogglingGroupId] = useState(null)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [formError, setFormError] = useState('')
@@ -89,6 +90,7 @@ export function SavingsGroupsPage() {
 
   async function toggleActive(group) {
     setError('')
+    setTogglingGroupId(group.id)
     try {
       const response = await apiRequest(`/api/savings-groups/${group.id}`, {
         method: 'PATCH',
@@ -101,6 +103,8 @@ export function SavingsGroupsPage() {
       }
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setTogglingGroupId(null)
     }
   }
 
@@ -218,8 +222,8 @@ export function SavingsGroupsPage() {
                     <td>{formatDate(group.createdAt, getLocale(preferences.language))}</td>
                     <td><span className="status-badge approved">{t('Active')}</span></td>
                     {canManage && <td>
-                      <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(group)}>
-                        <UserRoundX size={15} /> {t('Deactivate')}
+                      <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(group)} disabled={togglingGroupId === group.id}>
+                        {togglingGroupId === group.id ? <InlineLoading>{t('Updating…')}</InlineLoading> : <><UserRoundX size={15} /> {t('Deactivate')}</>}
                       </button>
                     </td>}
                   </tr>

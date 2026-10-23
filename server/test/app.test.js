@@ -471,6 +471,147 @@ test('authenticated users change passwords only after proving the current passwo
   }
 });
 
+test('password reset emails use a hashed, expiring, single-use token', async () => {
+  const originalFindOne = User.findOne;
+  const originalSender = app.locals.sendPasswordResetEmail;
+  const originalConfigured = app.locals.passwordResetEmailConfigured;
+  const user = {
+    _id: { toString: () => '507f1f77bcf86cd799439011' },
+    name: 'Community Member',
+    email: 'member@example.org',
+    passwordHash: await bcrypt.hash('CurrentPassword1', 4),
+    save: async function save() {},
+  };
+  let email;
+  User.findOne = (filter) => {
+    if (filter.email) return Promise.resolve(user);
+    return {
+      select: async () => filter.passwordResetTokenHash === user.passwordResetTokenHash
+        && user.passwordResetExpiresAt > new Date()
+        ? user
+        : null,
+    };
+  };
+  app.locals.passwordResetEmailConfigured = true;
+  app.locals.sendPasswordResetEmail = async (message) => { email = message; };
+
+  try {
+    const requestResponse = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email }),
+    });
+    const rawToken = new URL(email.resetUrl).searchParams.get('token');
+
+    assert.equal(requestResponse.status, 200);
+    assert.equal((await requestResponse.json()).message, 'If an account exists with this email, password reset instructions will be sent shortly.');
+    assert.equal(new URL(email.resetUrl).origin, 'http://localhost:5173');
+    assert.ok(rawToken);
+    assert.notEqual(user.passwordResetTokenHash, rawToken);
+    assert.ok(user.passwordResetExpiresAt > new Date());
+
+    const mismatchResponse = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: rawToken, password: 'NewSecurePassword123!', passwordConfirmation: 'MismatchPassword123!' }),
+    });
+    assert.equal(mismatchResponse.status, 400);
+    assert.equal((await mismatchResponse.json()).message, 'Passwords do not match.');
+
+    user.passwordResetExpiresAt = new Date(Date.now() - 1);
+    const expiredResponse = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        password: 'NewSecurePassword123!',
+        passwordConfirmation: 'NewSecurePassword123!',
+      }),
+    });
+    assert.equal(expiredResponse.status, 400);
+    assert.equal((await expiredResponse.json()).message, 'This password reset link is invalid or has expired. Request a new link.');
+
+    const renewedRequestResponse = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: user.email }),
+    });
+    assert.equal(renewedRequestResponse.status, 200);
+    const renewedToken = new URL(email.resetUrl).searchParams.get('token');
+
+    const resetResponse = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: renewedToken,
+        password: 'NewSecurePassword123!',
+        passwordConfirmation: 'NewSecurePassword123!',
+      }),
+    });
+
+    assert.equal(resetResponse.status, 200);
+    assert.equal((await resetResponse.json()).message, 'Your password has been reset. You can now sign in.');
+    assert.equal(await bcrypt.compare('NewSecurePassword123!', user.passwordHash), true);
+    assert.equal(user.passwordResetTokenHash, undefined);
+    assert.equal(user.passwordResetExpiresAt, undefined);
+
+    const replayResponse = await fetch(`${baseUrl}/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: rawToken,
+        password: 'AnotherSecurePassword123!',
+        passwordConfirmation: 'AnotherSecurePassword123!',
+      }),
+    });
+    assert.equal(replayResponse.status, 400);
+    assert.equal((await replayResponse.json()).message, 'This password reset link is invalid or has expired. Request a new link.');
+  } finally {
+    User.findOne = originalFindOne;
+    app.locals.sendPasswordResetEmail = originalSender;
+    app.locals.passwordResetEmailConfigured = originalConfigured;
+  }
+});
+
+test('password reset requests do not disclose whether an email address exists', async () => {
+  const originalFindOne = User.findOne;
+  const originalSender = app.locals.sendPasswordResetEmail;
+  const originalConfigured = app.locals.passwordResetEmailConfigured;
+  app.locals.passwordResetEmailConfigured = true;
+  app.locals.sendPasswordResetEmail = async () => {};
+  User.findOne = async () => null;
+
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'unknown@example.org' }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      message: 'If an account exists with this email, password reset instructions will be sent shortly.',
+    });
+  } finally {
+    User.findOne = originalFindOne;
+    app.locals.sendPasswordResetEmail = originalSender;
+    app.locals.passwordResetEmailConfigured = originalConfigured;
+  }
+});
+
+test('password reset requests report unavailable when SMTP is not configured', async () => {
+  const response = await fetch(`${baseUrl}/api/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'member@example.org' }),
+  });
+
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    message: 'Password reset is temporarily unavailable. Please contact your administrator.',
+  });
+});
+
 test('login endpoint applies an IP-based rate limit', async () => {
   let response;
   for (let attempt = 0; attempt < 11; attempt += 1) {

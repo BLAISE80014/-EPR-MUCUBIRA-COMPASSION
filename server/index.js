@@ -20,6 +20,14 @@ function getRequiredEnvironment() {
     mongoUri: process.env.MONGODB_URI,
     jwtSecret: process.env.JWT_SECRET,
     clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    smtp: {
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: process.env.SMTP_SECURE === 'true',
+      user: process.env.SMTP_USER,
+      password: process.env.SMTP_PASSWORD,
+      from: process.env.MAIL_FROM,
+    },
     port: Number(process.env.PORT) || 5000,
   };
 }

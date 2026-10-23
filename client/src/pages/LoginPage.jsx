@@ -17,7 +17,6 @@ export function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
-  const [helpMessage, setHelpMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const submissionLock = useRef(false)
 
@@ -62,8 +61,6 @@ export function LoginPage() {
         <p className="login-intro">{t('Use the email address and password you registered with to access your dashboard.')}</p>
 
         {error && <p className="form-alert" role="alert">{error}</p>}
-        {helpMessage && <p className="auth-notice" role="status">{helpMessage}</p>}
-
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <label htmlFor="login-account-type">{t('Account type')} <span className="auth-required" aria-hidden="true">*</span></label>
           <div className={`auth-input-wrap${fieldErrors.accountType ? ' auth-input-wrap--invalid' : ''}`}>
@@ -142,9 +139,9 @@ export function LoginPage() {
               <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
               <span>{t('Remember me')}</span>
             </label>
-            <button className="forgot-link" type="button" onClick={() => setHelpMessage(t('Password reset is not configured yet. Please contact your Director for help.'))}>
+            <Link className="forgot-link" to="/forgot-password">
               {t('Forgot password?')}
-            </button>
+            </Link>
           </div>
           <button className="primary-btn login-submit" type="submit" disabled={submitting}>
             {submitting ? <span className="login-spinner" aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}

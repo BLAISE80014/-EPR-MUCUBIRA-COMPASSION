@@ -92,6 +92,20 @@ export function AuthProvider({ children }) {
     })
   }, [])
 
+  const requestPasswordReset = useCallback(async (email) => {
+    return apiRequest('/api/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+    })
+  }, [])
+
+  const resetPassword = useCallback(async (token, password, passwordConfirmation) => {
+    return apiRequest('/api/auth/reset-password', {
+      method: 'POST',
+      body: { token, password, passwordConfirmation },
+    })
+  }, [])
+
   const login = useCallback(async (email, password, rememberMe, accountType) => {
     const response = await apiRequest('/api/auth/login', {
       method: 'POST',
@@ -128,8 +142,10 @@ export function AuthProvider({ children }) {
     refreshUser,
     updateProfile,
     changePassword,
+    requestPasswordReset,
+    resetPassword,
     retrySession,
-  }), [user, loading, sessionError, login, register, logout, refreshUser, updateProfile, changePassword, retrySession])
+  }), [user, loading, sessionError, login, register, logout, refreshUser, updateProfile, changePassword, requestPasswordReset, resetPassword, retrySession])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

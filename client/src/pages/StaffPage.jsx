@@ -49,6 +49,7 @@ export function StaffPage() {
   const [staff, setStaff] = useState([])
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
+  const [togglingStaffId, setTogglingStaffId] = useState(null)
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [formError, setFormError] = useState('')
@@ -271,6 +272,7 @@ export function StaffPage() {
 
   async function toggleActive(member) {
     setError('')
+    setTogglingStaffId(member.id)
     try {
       const response = await apiRequest(`/api/staff/${member.id}`, {
         method: 'PATCH',
@@ -279,6 +281,8 @@ export function StaffPage() {
       setStaff((old) => old.map((item) => item.id === member.id ? response.staff : item))
     } catch (requestError) {
       setError(requestError.message)
+    } finally {
+      setTogglingStaffId(null)
     }
   }
 
@@ -397,9 +401,10 @@ export function StaffPage() {
                           <button className="table-action" type="button" onClick={() => openEdit(member)} aria-label={`Edit ${member.name}`}>
                             <Edit3 size={15} /> {t('Edit')}
                           </button>
-                          <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(member)} disabled={member.role === 'pending' && !member.active} aria-label={member.role === 'pending' ? `Assign an approved role to ${member.name} before activation` : `${member.active ? 'Deactivate' : 'Activate'} ${member.name}`}>
-                            {member.active ? <UserRoundX size={15} /> : <Check size={15} />}
-                            {t(member.role === 'pending' ? 'Assign role first' : member.active ? 'Deactivate' : 'Activate')}
+                          <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(member)} disabled={(member.role === 'pending' && !member.active) || togglingStaffId === member.id} aria-label={member.role === 'pending' ? `Assign an approved role to ${member.name} before activation` : `${member.active ? 'Deactivate' : 'Activate'} ${member.name}`}>
+                            {togglingStaffId === member.id
+                              ? <InlineLoading>{t('Updating…')}</InlineLoading>
+                              : <>{member.active ? <UserRoundX size={15} /> : <Check size={15} />}{t(member.role === 'pending' ? 'Assign role first' : member.active ? 'Deactivate' : 'Activate')}</>}
                           </button>
                         </div>
                       </td>

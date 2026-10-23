@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import { InlineLoading } from '../components/LoadingStates'
 import { apiRequest } from '../lib/api'
 import { useTheme } from '../theme/useTheme'
 import { SUPPORTED_LANGUAGES } from '../i18n/translations'
@@ -156,6 +157,12 @@ export function SystemSettingsPage() {
     setSaveMessage('')
   }
 
+  function selectTheme(theme) {
+    updateDraft({ theme })
+    setSaved((current) => ({ ...current, theme }))
+    setTheme(theme)
+  }
+
   function saveSettings() {
     setTheme(draft.theme)
     updatePreferences({
@@ -269,7 +276,7 @@ export function SystemSettingsPage() {
               {profileError && <p className="settings-error" role="alert">{profileError}</p>}
               {profileMessage && <p className="settings-success" role="status">{profileMessage}</p>}
               <button className="primary-btn settings-save-button" type="submit" disabled={profileSubmitting || JSON.stringify(profileDraft) === JSON.stringify(profileSaved)}>
-                <Save size={15} aria-hidden="true" />{profileSubmitting ? t('Saving…') : t('Save profile')}
+                {profileSubmitting ? <InlineLoading>{t('Saving…')}</InlineLoading> : <><Save size={15} aria-hidden="true" />{t('Save profile')}</>}
               </button>
             </form>
             <dl className="settings-details">
@@ -289,8 +296,8 @@ export function SystemSettingsPage() {
               <p>Choose the color theme for the application on this browser.</p>
             </div>
             <div className="settings-option-grid">
-              <SettingChoice name="theme" value="light" checked={draft.theme === 'light'} onChange={() => updateDraft({ theme: 'light' })} label="Light" description="Bright surfaces and dark text" />
-              <SettingChoice name="theme" value="dark" checked={draft.theme === 'dark'} onChange={() => updateDraft({ theme: 'dark' })} label="Dark" description="Dim surfaces for low-light work" />
+              <SettingChoice name="theme" value="light" checked={draft.theme === 'light'} onChange={() => selectTheme('light')} label="Light" description="Bright surfaces and dark text" />
+              <SettingChoice name="theme" value="dark" checked={draft.theme === 'dark'} onChange={() => selectTheme('dark')} label="Dark" description="Dim surfaces for low-light work" />
             </div>
             <div className={`settings-theme-preview settings-theme-preview--${draft.theme}`} aria-label={`${draft.theme} theme preview`}>
               <span className="settings-theme-preview__rail" />
@@ -406,7 +413,7 @@ export function SystemSettingsPage() {
               {passwordError && <p className="settings-error" role="alert">{passwordError}</p>}
               {passwordMessage && <p className="settings-success" role="status">{passwordMessage}</p>}
               <button className="primary-btn settings-save-button" type="submit" disabled={passwordSubmitting}>
-                <LockKeyhole size={15} aria-hidden="true" />{passwordSubmitting ? t('Changing…') : t('Change password')}
+                {passwordSubmitting ? <InlineLoading>{t('Changing…')}</InlineLoading> : <><LockKeyhole size={15} aria-hidden="true" />{t('Change password')}</>}
               </button>
             </form>
           </>
@@ -420,12 +427,12 @@ export function SystemSettingsPage() {
               <p>Connection status reported by the application health endpoint.</p>
             </div>
             <div className="settings-system-status" aria-live="polite" aria-busy={systemStatus.loading}>
-              <div><span className={`settings-health-indicator${systemStatus.data?.status === 'ok' ? ' is-healthy' : ''}`} /><strong>Application API</strong><span>{systemStatus.loading ? 'Checking…' : systemStatus.data?.status || 'Unavailable'}</span></div>
-              <div><Database size={17} aria-hidden="true" /><strong>Database</strong><span>{systemStatus.loading ? 'Checking…' : systemStatus.data?.database || 'Unknown'}</span></div>
+              <div><span className={`settings-health-indicator${systemStatus.data?.status === 'ok' ? ' is-healthy' : ''}`} /><strong>Application API</strong><span>{systemStatus.loading ? <InlineLoading>{t('Checking…')}</InlineLoading> : systemStatus.data?.status || t('Unavailable')}</span></div>
+              <div><Database size={17} aria-hidden="true" /><strong>Database</strong><span>{systemStatus.loading ? <InlineLoading>{t('Checking…')}</InlineLoading> : systemStatus.data?.database || t('Unknown')}</span></div>
             </div>
             {systemStatus.error && <p className="settings-error" role="alert">{systemStatus.error}</p>}
             <button className="settings-action-link settings-action-link--button" type="button" onClick={refreshSystemStatus} disabled={systemStatus.loading}>
-              <Activity size={17} aria-hidden="true" />Refresh system status
+              <Activity size={17} className={systemStatus.loading ? 'spin' : ''} aria-hidden="true" />{systemStatus.loading ? t('Checking…') : t('Refresh system status')}
             </button>
             <p className="settings-note">A connected health check confirms the API's reported connection only; it does not guarantee service availability or data integrity.</p>
           </>

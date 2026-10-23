@@ -1,10 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const { createHash, randomBytes } = require('node:crypto');
 const jwt = require('jsonwebtoken');
 const { rateLimit } = require('express-rate-limit');
 const User = require('../models/User');
 const { ROLE_DEPARTMENTS } = require('../constants/roles');
-const { isValidRegistrationPassword } = require('../constants/passwordPolicy');
+const { isValidNewPassword, isValidRegistrationPassword } = require('../constants/passwordPolicy');
 const {
   publicUser,
   requireAuth,
@@ -42,8 +43,28 @@ const registrationRateLimit = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many account requests. Please wait an hour and try again.' },
 });
+const passwordResetRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many password reset requests. Please wait and try again.' },
+});
+const passwordUpdateRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many password reset attempts. Please wait and try again.' },
+});
 const PROFILE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PROFILE_PHONE_PATTERN = /^[+()\d\s.-]{7,32}$/;
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_MESSAGE = 'If an account exists with this email, password reset instructions will be sent shortly.';
+
+function hashResetToken(token) {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 function publicParentRegistration({ name, email, phone, passwordHash }) {
   return {
@@ -159,6 +180,75 @@ router.post('/logout', (req, res) => {
   return res.json({ message: 'Signed out successfully.' });
 });
 
+router.post('/forgot-password', passwordResetRateLimit, async (req, res, next) => {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+  if (!EMAIL_PATTERN.test(email) || email.length > 254) {
+    return res.status(400).json({ message: 'Enter a valid email address.' });
+  }
+  if (!req.app.locals.passwordResetEmailConfigured) {
+    return res.status(503).json({ message: 'Password reset is temporarily unavailable. Please contact your administrator.' });
+  }
+
+  let user;
+  try {
+    user = await User.findOne({ email });
+  } catch (error) {
+    return next(error);
+  }
+  if (!user) return res.json({ message: PASSWORD_RESET_MESSAGE });
+
+  const resetToken = randomBytes(32).toString('base64url');
+  user.passwordResetTokenHash = hashResetToken(resetToken);
+  user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+  await user.save();
+
+  const resetUrl = new URL('/reset-password', req.app.locals.clientOrigin);
+  resetUrl.searchParams.set('token', resetToken);
+  try {
+    await req.app.locals.sendPasswordResetEmail({ email: user.email, resetUrl: resetUrl.toString() });
+  } catch (error) {
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    await user.save();
+    console.error('Password reset email delivery failed:', error);
+  }
+
+  return res.json({ message: PASSWORD_RESET_MESSAGE });
+});
+
+router.post('/reset-password', passwordUpdateRateLimit, async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  const passwordConfirmation = typeof req.body?.passwordConfirmation === 'string'
+    ? req.body.passwordConfirmation
+    : '';
+
+  if (!token || token.length > 128) {
+    return res.status(400).json({ message: 'This password reset link is invalid or has expired. Request a new link.' });
+  }
+  if (!isValidNewPassword(password)) {
+    return res.status(400).json({ message: 'Use a password of 12–128 characters and no more than 72 UTF-8 bytes.' });
+  }
+  if (password !== passwordConfirmation) {
+    return res.status(400).json({ message: 'Passwords do not match.' });
+  }
+
+  const user = await User.findOne({
+    passwordResetTokenHash: hashResetToken(token),
+    passwordResetExpiresAt: { $gt: new Date() },
+  }).select('+passwordHash +passwordResetTokenHash +passwordResetExpiresAt');
+
+  if (!user) {
+    return res.status(400).json({ message: 'This password reset link is invalid or has expired. Request a new link.' });
+  }
+
+  user.passwordHash = await bcrypt.hash(password, 12);
+  user.passwordResetTokenHash = undefined;
+  user.passwordResetExpiresAt = undefined;
+  await user.save();
+  return res.json({ message: 'Your password has been reset. You can now sign in.' });
+});
+
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
@@ -227,6 +317,8 @@ router.patch('/password', requireAuth, async (req, res) => {
   }
 
   user.passwordHash = await bcrypt.hash(newPassword, 12);
+  user.passwordResetTokenHash = undefined;
+  user.passwordResetExpiresAt = undefined;
   await user.save();
   return res.json({ message: 'Your password has been changed.' });
 });

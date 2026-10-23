@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from './auth/AuthContext'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
-import { AuthProvider, useAuth } from './auth/AuthContext'
+import { AuthProvider } from './auth/AuthContext'
 import { AppLayout } from './components/AppLayout'
 import { AppLoadingError, AppLoadingScreen } from './components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from './auth/roleRoutes'
 import { DashboardPage } from './pages/DashboardPage'
 import { DepartmentPage, DirectorModulePage } from './pages/DirectorModulePage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemberDashboardPage } from './pages/MemberDashboardPage'
 import { ParentDashboardPage } from './pages/ParentDashboardPage'
 import { SavingsGroupsPage } from './pages/SavingsGroupsPage'
 import { SignupPage } from './pages/SignupPage'
+import { ResetPasswordPage } from './pages/ResetPasswordPage'
 import { StaffPage } from './pages/StaffPage'
 import { SystemSettingsPage } from './pages/SystemSettingsPage'
 import { ThemeProvider } from './theme/ThemeProvider'
@@ -80,6 +83,8 @@ function ApplicationRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoutes />}>
         <Route element={<AppLayout />}>
           <Route index element={<HomeRedirect />} />
@@ -173,16 +178,9 @@ function SessionInitialization() {
     return () => window.clearTimeout(startupTimer)
   }, [])
 
-  if (loading || !minimumStartupElapsed) {
-    return (
-      <AppLoadingScreen
-        message="Preparing your workspace..."
-        progressDurationMs={MINIMUM_STARTUP_DURATION_MS}
-      />
-    )
-  }
-
-  return <ApplicationRoutes />
+  return loading || !minimumStartupElapsed
+    ? <AppLoadingScreen message="Checking your session..." progressDurationMs={MINIMUM_STARTUP_DURATION_MS} />
+    : <ApplicationRoutes />
 }
 
 export default function App() {

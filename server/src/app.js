@@ -5,6 +5,7 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const savingsGroupRoutes = require('./routes/savingsGroups');
 const staffRoutes = require('./routes/staff');
+const { createPasswordResetEmailSender } = require('./services/passwordResetEmail');
 
 function createApp(config) {
   if (!config?.jwtSecret || Buffer.byteLength(config.jwtSecret, 'utf8') < 32) {
@@ -12,6 +13,7 @@ function createApp(config) {
   }
 
   const configuredOrigin = new URL(config.clientOrigin || 'http://localhost:5173');
+  const clientOrigin = configuredOrigin.origin;
   const allowedOrigins = new Set([configuredOrigin.origin]);
   if (process.env.NODE_ENV !== 'production') {
     if (configuredOrigin.hostname === 'localhost') {
@@ -26,6 +28,10 @@ function createApp(config) {
 
   app.locals.jwtSecret = config.jwtSecret;
   app.locals.production = process.env.NODE_ENV === 'production';
+  app.locals.clientOrigin = clientOrigin;
+  app.locals.sendPasswordResetEmail = config.sendPasswordResetEmail
+    || createPasswordResetEmailSender(config.smtp);
+  app.locals.passwordResetEmailConfigured = Boolean(app.locals.sendPasswordResetEmail);
 
   app.disable('x-powered-by');
   app.use((req, res, next) => {

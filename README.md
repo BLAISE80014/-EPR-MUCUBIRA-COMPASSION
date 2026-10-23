@@ -96,9 +96,31 @@ savings-group administration. Sign-in attempts are limited to 10 per IP per
 The default limiter uses an in-memory store; multi-instance deployments should
 configure a shared rate-limit store.
 
-The current repository does not provide an email verification or password
-reset service. Before production use, publish organization-approved terms and a
-privacy notice and link them from the registration consent.
+### Password reset email setup
+
+Password recovery is available from the login page. To deliver reset links,
+configure the API's SMTP settings in `server/.env`:
+
+```env
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+MAIL_FROM=EPR Mucubira Compassion <no-reply@example.org>
+CLIENT_ORIGIN=https://your-application.example.org
+```
+
+Use port 465 with `SMTP_SECURE=true` for implicit TLS, or port 587 with
+`SMTP_SECURE=false` for STARTTLS. SMTP credentials must stay on the server.
+Without complete mail settings, password-reset requests remain unavailable.
+Reset tokens are cryptographically random, stored only as SHA-256 hashes, expire
+after 30 minutes, and can be used once. Responses do not disclose whether an
+email address has an account. New passwords must be at least 12 characters and
+no more than 72 UTF-8 bytes.
+
+Before production use, publish organization-approved terms and a privacy notice
+and link them from the registration consent.
 
 ## Verification
 

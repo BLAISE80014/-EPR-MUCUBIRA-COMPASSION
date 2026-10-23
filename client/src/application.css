@@ -2967,6 +2967,17 @@ body.navigation-drawer-open {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  .app-loading-progress > span {
+    animation: startup-progress var(--startup-duration, 4000ms) linear forwards !important;
+  }
+
+  .app-loading-spinner,
+  .inline-loading__spinner,
+  .button-spinner,
+  .spin {
+    animation: spin 800ms linear infinite !important;
+  }
 }
 
 html[data-theme='dark'] {
@@ -3972,6 +3983,15 @@ html[data-animation-mode='minimal'] *::after {
   transition: none !important;
 }
 
+html[data-animation-mode='minimal'] .app-loading-progress > span {
+  animation: none !important;
+  transform: scaleX(1) !important;
+}
+
+html[data-animation-mode='reduced'] .app-loading-progress > span {
+  animation: startup-progress var(--startup-duration, 4000ms) linear forwards !important;
+}
+
 html[data-animation-mode='reduced'] *,
 html[data-animation-mode='reduced'] *::before,
 html[data-animation-mode='reduced'] *::after {
@@ -3979,6 +3999,13 @@ html[data-animation-mode='reduced'] *::after {
   animation-iteration-count: 1 !important;
   scroll-behavior: auto !important;
   transition-duration: 0.01ms !important;
+}
+
+html[data-animation-mode='reduced'] .app-loading-spinner,
+html[data-animation-mode='reduced'] .inline-loading__spinner,
+html[data-animation-mode='reduced'] .button-spinner,
+html[data-animation-mode='reduced'] .spin {
+  animation: spin 800ms linear infinite !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

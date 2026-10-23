@@ -927,6 +927,10 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  .login-spinner {
+    animation: auth-spin 700ms linear infinite !important;
+  }
 }
 
 html[data-theme='dark'] .login-page {
