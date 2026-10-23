@@ -612,9 +612,9 @@
 }
 
 .login-content .auth-notice {
-  border: 1px solid #a7f3d0;
-  background: #ecfdf5;
-  color: #065f46;
+  border: 1px solid #a7c5f3;
+  background: #ecf3fd;
+  color: #062a5f;
 }
 
 .login-content .signup-form {
@@ -678,8 +678,8 @@
 .strength-0 { width: 0; }
 .strength-1 { width: 25%; background: #e11d48; }
 .strength-2 { width: 50%; background: #d97706; }
-.strength-3 { width: 75%; background: #65a30d; }
-.strength-4 { width: 100%; background: #15803d; }
+.strength-3 { width: 75%; background: #0d49a3; }
+.strength-4 { width: 100%; background: #154080; }
 
 .password-guidance {
   margin: -3px 0 0;
@@ -1080,9 +1080,9 @@ html[data-theme='dark'] .login-content .form-alert {
 }
 
 html[data-theme='dark'] .login-content .auth-notice {
-  border-color: #28634d;
-  background: #123327;
-  color: #9aebc7;
+  border-color: #284063;
+  background: #121f33;
+  color: #9abaeb;
 }
 
 html[data-theme='dark'] .strength-track {

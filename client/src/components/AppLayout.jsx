@@ -24,6 +24,7 @@ import {
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ThemeToggle } from './ThemeToggle'
+import { useTheme } from '../theme/useTheme'
 
 const ROLE_LABELS = {
   director: 'Director',
@@ -98,19 +99,13 @@ function currentPeriod() {
 
 export function AppLayout() {
   const { user, logout } = useAuth()
+  const { preferences, updatePreferences, t } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
   const [period, setPeriod] = useState(currentPeriod)
   const [search, setSearch] = useState('')
   const [logoutError, setLogoutError] = useState('')
-  const [collapsed, setCollapsed] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem('compassion-sidebar-collapsed')
-      return saved === 'true'
-    } catch {
-      return false
-    }
-  })
+  const collapsed = preferences.sidebarCollapsed
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const searchInputRef = useRef(null)
@@ -118,14 +113,6 @@ export function AppLayout() {
   const drawerCloseRef = useRef(null)
   const drawerTriggerRef = useRef(null)
   const drawerWasOpenRef = useRef(false)
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('compassion-sidebar-collapsed', String(collapsed))
-    } catch {
-      // Ignore storage access issues in privacy-restricted browsers.
-    }
-  }, [collapsed])
 
   useEffect(() => {
     if (drawerOpen) {
@@ -238,15 +225,15 @@ export function AppLayout() {
           <Link className="brand-box" to={user.role === 'director' ? '/dashboard' : navItems[0]?.path || '/dashboard'}>
             <span className="brand-mark"><HeartHandshake size={21} aria-hidden="true" /></span>
             <span className="brand-copy">
-              <strong>Compassion</strong>
-              <small>Management System</small>
+              <strong>{t('Compassion')}</strong>
+              <small>{t('Management System')}</small>
             </span>
           </Link>
           <div className="sidebar-header-actions">
             <button
               className="sidebar-collapse"
               type="button"
-              onClick={() => setCollapsed((value) => !value)}
+              onClick={() => updatePreferences({ sidebarCollapsed: !collapsed })}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-expanded={!collapsed}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -269,7 +256,7 @@ export function AppLayout() {
           <nav aria-label="Main navigation">
             {navGroups.map(({ label, items }) => (
               <section className="sidebar-nav-group" key={label} aria-label={label}>
-                <h2 className="sidebar-section-label">{label}</h2>
+                {preferences.showNavigationHeadings && <h2 className="sidebar-section-label">{t(label)}</h2>}
                 <div className="nav-menu">
                   {items.map(({ label: itemLabel, path, icon: Icon }) => (
                     <NavLink
@@ -282,7 +269,7 @@ export function AppLayout() {
                       onClick={() => setDrawerOpen(false)}
                     >
                       <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
-                      <span>{itemLabel}</span>
+                      <span>{t(itemLabel)}</span>
                     </NavLink>
                   ))}
                 </div>
@@ -294,7 +281,7 @@ export function AppLayout() {
         {user.role === 'director' && (
           <div className="sidebar-mission">
             <HeartHandshake size={17} aria-hidden="true" />
-            <p>Together for stronger, more compassionate communities.</p>
+            <p>{t('Together for stronger, more compassionate communities.')}</p>
           </div>
         )}
 
@@ -303,10 +290,10 @@ export function AppLayout() {
             <span className="sidebar-user__avatar" aria-hidden="true">{initials}</span>
             <span className="sidebar-user__copy">
               <strong>{user.name}</strong>
-              <small>{ROLE_LABELS[user.role] || 'Team member'}</small>
+              <small>{t(ROLE_LABELS[user.role] || 'Team member')}</small>
             </span>
           </div>
-          <div className="sidebar-account-label">Account</div>
+          <div className="sidebar-account-label">{t('Account')}</div>
           <button className="nav-item nav-logout" type="button" onClick={handleLogout} title={collapsed ? 'Log out' : undefined}>
             <LogOut size={19} strokeWidth={1.8} aria-hidden="true" />
             <span>Log out</span>
@@ -330,7 +317,7 @@ export function AppLayout() {
             </button>
 
             <div className="breadcrumbs" aria-label="Breadcrumb">
-              <span>Workspace</span>
+              <span>{t('Workspace')}</span>
               <span className="breadcrumb-divider">/</span>
               <strong>{pageTitle}</strong>
             </div>
@@ -342,8 +329,8 @@ export function AppLayout() {
                 <Search size={16} aria-hidden="true" />
                 <input
                   ref={searchInputRef}
-                  aria-label="Search staff"
-                  placeholder="Search staff"
+                  aria-label={t('Search staff')}
+                  placeholder={t('Search staff')}
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
@@ -398,7 +385,7 @@ export function AppLayout() {
                 <span className="avatar">{initials}</span>
                 <span className="profile-copy">
                   <strong>{user.name}</strong>
-                  <small>{ROLE_LABELS[user.role] || 'Team member'}</small>
+                  <small>{t(ROLE_LABELS[user.role] || 'Team member')}</small>
                 </span>
                 <ChevronDown size={15} aria-hidden="true" />
               </button>
@@ -423,8 +410,8 @@ export function AppLayout() {
         <div className="page-content">
           <Outlet context={{ period, setPeriod }} />
           <footer className="app-footer">
-            <span><Activity size={14} aria-hidden="true" /> Compassion Management System</span>
-            <span>Secure workspace</span>
+            <span><Activity size={14} aria-hidden="true" /> {t('Compassion Management System')}</span>
+            <span>{t('Secure workspace')}</span>
           </footer>
         </div>
       </main>

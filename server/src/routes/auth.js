@@ -42,6 +42,8 @@ const registrationRateLimit = rateLimit({
   legacyHeaders: false,
   message: { message: 'Too many account requests. Please wait an hour and try again.' },
 });
+const PROFILE_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PROFILE_PHONE_PATTERN = /^[+()\d\s.-]{7,32}$/;
 
 function publicParentRegistration({ name, email, phone, passwordHash }) {
   return {
@@ -159,6 +161,74 @@ router.post('/logout', (req, res) => {
 
 router.get('/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
+});
+
+router.patch('/profile', requireAuth, async (req, res) => {
+  const { name, email, phone, currentPassword } = req.body || {};
+  const updates = req.body || {};
+  if (!Object.keys(updates).length || Object.keys(updates).some(
+    (field) => !['name', 'email', 'phone', 'currentPassword'].includes(field),
+  )) {
+    return res.status(400).json({ message: 'The profile update contains unsupported fields.' });
+  }
+
+  const normalizedName = typeof name === 'string' ? name.trim() : undefined;
+  const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+  const normalizedPhone = typeof phone === 'string' ? phone.trim() : undefined;
+
+  if (name !== undefined && (
+    typeof name !== 'string' || normalizedName.length < 2 || normalizedName.length > 120
+    || /[\u0000-\u001F\u007F]/.test(normalizedName)
+  )) {
+    return res.status(400).json({ message: 'Name must be between 2 and 120 characters.' });
+  }
+  if (email !== undefined && (
+    typeof email !== 'string' || !PROFILE_EMAIL_PATTERN.test(normalizedEmail) || normalizedEmail.length > 254
+  )) {
+    return res.status(400).json({ message: 'Enter a valid email address.' });
+  }
+  if (phone !== undefined && (
+    typeof phone !== 'string' || (normalizedPhone && !PROFILE_PHONE_PATTERN.test(normalizedPhone))
+  )) {
+    return res.status(400).json({ message: 'Enter a valid phone number or leave the field blank.' });
+  }
+
+  const user = await User.findById(req.user._id).select('+passwordHash');
+  if (!user) return res.status(404).json({ message: 'Account not found.' });
+  if (normalizedEmail && normalizedEmail !== user.email) {
+    if (typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+      return res.status(401).json({ message: 'Enter your current password to change your email address.' });
+    }
+    user.email = normalizedEmail;
+  }
+  if (normalizedName !== undefined) user.name = normalizedName;
+  if (normalizedPhone !== undefined) user.phone = normalizedPhone;
+
+  await user.save();
+  return res.json({ user: publicUser(user) });
+});
+
+router.patch('/password', requireAuth, async (req, res) => {
+  const currentPassword = typeof req.body?.currentPassword === 'string' ? req.body.currentPassword : '';
+  const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+  if (!currentPassword || !isValidRegistrationPassword(newPassword)) {
+    return res.status(400).json({
+      message: 'Enter your current password and a new password of up to 128 characters and no more than 72 UTF-8 bytes.',
+    });
+  }
+
+  const user = await User.findById(req.user._id).select('+passwordHash');
+  if (!user) return res.status(404).json({ message: 'Account not found.' });
+  if (!(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    return res.status(401).json({ message: 'Your current password is incorrect.' });
+  }
+  if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    return res.status(400).json({ message: 'Choose a new password different from your current password.' });
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, 12);
+  await user.save();
+  return res.json({ message: 'Your password has been changed.' });
 });
 
 module.exports = router;

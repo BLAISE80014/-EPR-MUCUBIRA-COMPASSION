@@ -4,13 +4,16 @@ import { useAuth } from '../auth/AuthContext'
 import { FormField } from '../components/FormField'
 import { InlineLoading, SkeletonTable } from '../components/LoadingStates'
 import { apiRequest } from '../lib/api'
+import { useTheme } from '../theme/useTheme'
+import { getLocale } from '../i18n/translations'
 
-function formatDate(value) {
-  return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value))
+function formatDate(value, locale) {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value))
 }
 
 export function SavingsGroupsPage() {
   const { user } = useAuth()
+  const { t, preferences } = useTheme()
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -105,12 +108,12 @@ export function SavingsGroupsPage() {
     <>
       <section className="page-header">
         <div>
-          <p className="eyebrow">Savings group management</p>
-          <h1>{user.role === 'savings_group_manager' ? 'Assigned Saving Groups' : 'Saving Group'}</h1>
+          <p className="eyebrow">{t('Savings group management')}</p>
+          <h1>{t(user.role === 'savings_group_manager' ? 'Assigned Saving Groups' : 'Saving Group')}</h1>
           <p className="page-description">
-            {user.role === 'savings_group_manager'
+            {t(user.role === 'savings_group_manager'
               ? 'This list is limited to the groups assigned to your account.'
-              : 'Group identities remain separate, with responsible staff assignments shown for each group.'}
+              : 'Group identities remain separate, with responsible staff assignments shown for each group.')}
           </p>
         </div>
         {canManage && (
@@ -121,29 +124,29 @@ export function SavingsGroupsPage() {
             setSuccessMessage('')
           }}>
             <CirclePlus size={16} />
-            {creating ? 'Close form' : 'Add savings group'}
+            {t(creating ? 'Close form' : 'Add savings group')}
           </button>
         )}
       </section>
 
       {error && (
         <div className="form-alert form-alert--with-action" role="alert">
-          <span>{error}</span>
+          <span>{t(error)}</span>
           <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
+            <RefreshCw size={14} aria-hidden="true" /> {t('Retry')}
           </button>
         </div>
       )}
-      {successMessage && <p className="form-success" role="status">{successMessage}</p>}
+      {successMessage && <p className="form-success" role="status">{t(successMessage)}</p>}
 
       {creating && canManage && (
         <form className="panel group-create-form" onSubmit={handleCreate} noValidate>
           <div>
-            <p className="eyebrow">New group</p>
-            <h3>Register a savings group</h3>
-            <p className="form-intro">Add the group name and a short unique identifier for staff to recognize.</p>
+            <p className="eyebrow">{t('New group')}</p>
+              <h3>{t('Register a savings group')}</h3>
+              <p className="form-intro">{t('Add the group name and a short unique identifier for staff to recognize.')}</p>
           </div>
-          {formError && <p className="form-alert" role="alert">{formError}</p>}
+          {formError && <p className="form-alert" role="alert">{t(formError)}</p>}
           <FormField id="group-name" label="Group name" required hint="Use the name recognized by your community." error={fieldErrors.name}>
             {(attrs) => <input {...attrs} value={name} onChange={(event) => {
               setName(event.target.value)
@@ -163,9 +166,9 @@ export function SavingsGroupsPage() {
               setCreating(false)
               setFormError('')
               setFieldErrors({})
-            }} disabled={saving}>Cancel</button>
+            }} disabled={saving}>{t('Cancel')}</button>
             <button className="primary-btn" type="submit" disabled={saving}>
-              {saving ? <><span className="button-spinner" aria-hidden="true" />Creating…</> : 'Create group'}
+              {saving ? <><span className="button-spinner" aria-hidden="true" />{t('Creating…')}</> : t('Create group')}
             </button>
           </div>
         </form>
@@ -174,49 +177,49 @@ export function SavingsGroupsPage() {
       <section className="panel staff-panel">
         <div className="panel-header">
           <div>
-            <p className="eyebrow">{groups.length} active {groups.length === 1 ? 'group' : 'groups'}</p>
-            <h3>Registered savings groups</h3>
+            <p className="eyebrow">{groups.length} {t('active')} {t(groups.length === 1 ? 'group' : 'groups')}</p>
+            <h3>{t('Registered savings groups')}</h3>
           </div>
           <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true" />
-            Refresh
+            {t('Refresh')}
           </button>
         </div>
         {loading && groups.length === 0 ? <SkeletonTable columns={canManage ? 5 : 4} label="Loading savings groups" /> : error && groups.length === 0 ? (
           <div className="empty-state">
-            <strong>Savings groups are unavailable</strong>
-            <span>Retry the request to load available groups.</span>
+            <strong>{t('Savings groups are unavailable')}</strong>
+            <span>{t('Retry the request to load available groups.')}</span>
           </div>
         ) : groups.length === 0 ? (
           <div className="empty-state">
             <PiggyBank size={22} />
-            <strong>No active savings groups</strong>
-            <span>{canManage ? 'Create a group before assigning Savings Group Managers.' : 'No groups are currently assigned to your account.'}</span>
+            <strong>{t('No active savings groups')}</strong>
+            <span>{t(canManage ? 'Create a group before assigning Savings Group Managers.' : 'No groups are currently assigned to your account.')}</span>
           </div>
         ) : (
           <>
-          {loading && <div className="section-refreshing"><InlineLoading>Refreshing savings groups…</InlineLoading></div>}
+          {loading && <div className="section-refreshing"><InlineLoading>{t('Refreshing savings groups…')}</InlineLoading></div>}
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Group</th>
-                  <th>Responsible staff</th>
-                  <th>Created</th>
-                  <th>Status</th>
-                  {canManage && <th>Actions</th>}
+                  <th>{t('Group')}</th>
+                  <th>{t('Responsible staff')}</th>
+                  <th>{t('Created')}</th>
+                  <th>{t('Status')}</th>
+                  {canManage && <th>{t('Actions')}</th>}
                 </tr>
               </thead>
               <tbody>
                 {groups.map((group) => (
                   <tr key={group.id}>
                     <td><strong>{group.name}</strong><span className="table-secondary">ID: {group.code}</span></td>
-                    <td>{group.managers.length ? group.managers.map((manager) => <span className="manager-name" key={manager.id}>{manager.name}</span>) : 'Not assigned'}</td>
-                    <td>{formatDate(group.createdAt)}</td>
-                    <td><span className="status-badge approved">Active</span></td>
+                    <td>{group.managers.length ? group.managers.map((manager) => <span className="manager-name" key={manager.id}>{manager.name}</span>) : t('Not assigned')}</td>
+                    <td>{formatDate(group.createdAt, getLocale(preferences.language))}</td>
+                    <td><span className="status-badge approved">{t('Active')}</span></td>
                     {canManage && <td>
                       <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(group)}>
-                        <UserRoundX size={15} /> Deactivate
+                        <UserRoundX size={15} /> {t('Deactivate')}
                       </button>
                     </td>}
                   </tr>

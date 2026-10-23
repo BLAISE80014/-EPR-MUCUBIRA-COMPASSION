@@ -16,8 +16,8 @@ import {
 import { Link, useOutletContext } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { InlineLoading, SkeletonCards } from '../components/LoadingStates'
-import { ThemeToggle } from '../components/ThemeToggle'
 import { apiRequest } from '../lib/api'
+import { useTheme } from '../theme/useTheme'
 
 const MODULES = {
   accounting: {
@@ -94,12 +94,13 @@ const DEPARTMENTS = [
 ]
 
 function PageHeader({ eyebrow, title, description }) {
+  const { t } = useTheme()
   return (
     <section className="page-header">
       <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h1>{title}</h1>
-        <p className="page-description">{description}</p>
+        <p className="eyebrow">{t(eyebrow)}</p>
+        <h1>{t(title)}</h1>
+        <p className="page-description">{t(description)}</p>
       </div>
     </section>
   )
@@ -205,47 +206,6 @@ export function DepartmentPage() {
           Department names and counts reflect the current staff role model. Department heads and department-level targets are not stored in the available records.
         </p>
       </section>
-    </>
-  )
-}
-
-export function SettingsPage() {
-  const { user } = useAuth()
-  const initials = user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
-
-  return (
-    <>
-      <PageHeader
-        eyebrow="Your workspace"
-        title="Settings"
-        description="Manage the appearance of your workspace and review your account information."
-      />
-      <div className="settings-grid">
-        <section className="panel settings-card" id="profile">
-          <div className="panel-header">
-            <div><p className="eyebrow">Account</p><h2>Profile information</h2></div>
-          </div>
-          <div className="settings-profile">
-            <span className="avatar settings-avatar">{initials}</span>
-            <div><strong>{user.name}</strong><small>{user.email}</small></div>
-          </div>
-          <dl className="profile-details">
-            <div><dt>Role</dt><dd>{user.role.replaceAll('_', ' ')}</dd></div>
-            <div><dt>Department</dt><dd>{user.department || 'Not assigned'}</dd></div>
-          </dl>
-          <p className="module-footnote">Profile edits and organization preferences are not supported by the current account API.</p>
-        </section>
-        <section className="panel settings-card">
-          <div className="panel-header">
-            <div><p className="eyebrow">Preferences</p><h2>Appearance</h2></div>
-          </div>
-          <div className="settings-preference">
-            <div><strong>Color theme</strong><p>Choose a comfortable appearance for this device.</p></div>
-            <ThemeToggle />
-          </div>
-          <p className="module-footnote">Your theme preference is saved locally in this browser.</p>
-        </section>
-      </div>
     </>
   )
 }

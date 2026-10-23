@@ -76,6 +76,22 @@ export function AuthProvider({ children }) {
     return response.user
   }, [])
 
+  const updateProfile = useCallback(async (profile) => {
+    const response = await apiRequest('/api/auth/profile', {
+      method: 'PATCH',
+      body: profile,
+    })
+    setUser(response.user)
+    return response.user
+  }, [])
+
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    return apiRequest('/api/auth/password', {
+      method: 'PATCH',
+      body: { currentPassword, newPassword },
+    })
+  }, [])
+
   const login = useCallback(async (email, password, rememberMe, accountType) => {
     const response = await apiRequest('/api/auth/login', {
       method: 'POST',
@@ -110,8 +126,10 @@ export function AuthProvider({ children }) {
     register,
     logout,
     refreshUser,
+    updateProfile,
+    changePassword,
     retrySession,
-  }), [user, loading, sessionError, login, register, logout, refreshUser, retrySession])
+  }), [user, loading, sessionError, login, register, logout, refreshUser, updateProfile, changePassword, retrySession])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

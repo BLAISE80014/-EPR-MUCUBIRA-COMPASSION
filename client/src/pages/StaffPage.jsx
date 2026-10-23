@@ -4,6 +4,8 @@ import { useSearchParams } from 'react-router-dom'
 import { FormField } from '../components/FormField'
 import { InlineLoading, SkeletonTable } from '../components/LoadingStates'
 import { apiRequest } from '../lib/api'
+import { useTheme } from '../theme/useTheme'
+import { getLocale } from '../i18n/translations'
 
 const STAFF_ROLES = [
   { value: 'accountant', label: 'Accountant' },
@@ -34,11 +36,12 @@ const emptyForm = {
   groupIds: [],
 }
 
-function formatDate(value) {
-  return new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(value))
+function formatDate(value, locale) {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value))
 }
 
 export function StaffPage() {
+  const { t, preferences } = useTheme()
   const [queryParams, setQueryParams] = useSearchParams()
   const [search, setSearch] = useState(queryParams.get('search') || '')
   const [roleFilter, setRoleFilter] = useState('')
@@ -289,58 +292,58 @@ export function StaffPage() {
     <>
       <section className="page-header">
         <div>
-          <p className="eyebrow">Organization administration</p>
-          <h1>Staff &amp; Users</h1>
-          <p className="page-description">Create accounts and manage staff access, roles, and assigned savings groups.</p>
+          <p className="eyebrow">{t('Organization administration')}</p>
+          <h1>{t('Staff & Users')}</h1>
+          <p className="page-description">{t('Create accounts and manage staff access, roles, and assigned savings groups.')}</p>
         </div>
         <div className="header-actions">
           <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'spin' : ''} aria-hidden="true" />
-            Refresh
+            {t('Refresh')}
           </button>
           <button className="primary-btn" type="button" onClick={openCreate}>
             <Plus size={16} />
-            Add staff account
+            {t('Add staff account')}
           </button>
         </div>
       </section>
 
       {error && (
         <div className="form-alert form-alert--with-action" role="alert">
-          <span>{error}</span>
+          <span>{t(error)}</span>
           <button className="secondary-btn" type="button" onClick={() => setRefreshKey((value) => value + 1)}>
-            <RefreshCw size={14} aria-hidden="true" /> Retry
+            <RefreshCw size={14} aria-hidden="true" /> {t('Retry')}
           </button>
         </div>
       )}
-      {successMessage && <p className="form-success" role="status">{successMessage}</p>}
+      {successMessage && <p className="form-success" role="status">{t(successMessage)}</p>}
 
       <section className="panel staff-panel">
         <div className="staff-toolbar">
           <label className="staff-search">
             <Search size={16} />
             <input
-              aria-label="Search staff"
-              placeholder="Search by name or email"
+              aria-label={t('Search staff')}
+              placeholder={t('Search by name or email')}
               value={search}
               onChange={(event) => updateQuery(event.target.value)}
             />
           </label>
           <div className="filter-controls">
             <label>
-              <span className="visually-hidden">Filter by role</span>
+              <span className="visually-hidden">{t('Filter by role')}</span>
               <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-                <option value="">All roles</option>
-                {STAFF_ROLES.map((role) => <option value={role.value} key={role.value}>{role.label}</option>)}
+                <option value="">{t('All roles')}</option>
+                {STAFF_ROLES.map((role) => <option value={role.value} key={role.value}>{t(role.label)}</option>)}
               </select>
             </label>
             <label>
-              <span className="visually-hidden">Filter by account status</span>
+              <span className="visually-hidden">{t('Filter by account status')}</span>
               <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-                <option value="pending">Pending approval</option>
+                <option value="">{t('All statuses')}</option>
+                <option value="active">{t('Active')}</option>
+                <option value="inactive">{t('Inactive')}</option>
+                <option value="pending">{t('Pending approval')}</option>
               </select>
             </label>
           </div>
@@ -348,28 +351,28 @@ export function StaffPage() {
 
         {loading && staff.length === 0 ? <SkeletonTable columns={6} label="Loading staff records" /> : error && staff.length === 0 ? (
           <div className="empty-state">
-            <strong>Staff records are unavailable</strong>
-            <span>Retry the request to load staff accounts.</span>
+            <strong>{t('Staff records are unavailable')}</strong>
+            <span>{t('Retry the request to load staff accounts.')}</span>
           </div>
         ) : staff.length === 0 ? (
           <div className="empty-state">
             <UsersIcon />
-            <strong>No staff accounts found</strong>
-            <span>Create an account or adjust the search and filters.</span>
+            <strong>{t('No staff accounts found')}</strong>
+            <span>{t('Create an account or adjust the search and filters.')}</span>
           </div>
         ) : (
           <>
-          {loading && <div className="section-refreshing"><InlineLoading>Refreshing staff records…</InlineLoading></div>}
+          {loading && <div className="section-refreshing"><InlineLoading>{t('Refreshing staff records…')}</InlineLoading></div>}
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Staff member</th>
-                  <th>Role / Department</th>
-                  <th>Savings groups</th>
-                  <th>Created</th>
-                  <th>Status</th>
-                  <th>Actions</th>
+                  <th>{t('Staff member')}</th>
+                  <th>{t('Role / Department')}</th>
+                  <th>{t('Savings groups')}</th>
+                  <th>{t('Created')}</th>
+                  <th>{t('Status')}</th>
+                  <th>{t('Actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -383,20 +386,20 @@ export function StaffPage() {
                         {member.phone && <span className="table-secondary">{member.phone}</span>}
                       </td>
                       <td>
-                        <strong>{ROLE_LABELS[member.role] || member.role}</strong>
-                        <span className="table-secondary">{DEPARTMENT_LABELS[member.department] || member.department}</span>
+                        <strong>{t(ROLE_LABELS[member.role] || member.role)}</strong>
+                        <span className="table-secondary">{t(DEPARTMENT_LABELS[member.department] || member.department)}</span>
                       </td>
                       <td>{assignedGroups.length ? assignedGroups.map((group) => group.code).join(', ') : '—'}</td>
-                      <td>{formatDate(member.createdAt)}</td>
-                      <td><span className={`status-badge ${member.role === 'pending' ? 'under-review' : member.active ? 'approved' : 'rejected'}`}>{member.role === 'pending' ? 'Pending approval' : member.active ? 'Active' : 'Inactive'}</span></td>
+                      <td>{formatDate(member.createdAt, getLocale(preferences.language))}</td>
+                      <td><span className={`status-badge ${member.role === 'pending' ? 'under-review' : member.active ? 'approved' : 'rejected'}`}>{t(member.role === 'pending' ? 'Pending approval' : member.active ? 'Active' : 'Inactive')}</span></td>
                       <td>
                         <div className="table-actions">
                           <button className="table-action" type="button" onClick={() => openEdit(member)} aria-label={`Edit ${member.name}`}>
-                            <Edit3 size={15} /> Edit
+                            <Edit3 size={15} /> {t('Edit')}
                           </button>
                           <button className="table-action table-action--subtle" type="button" onClick={() => toggleActive(member)} disabled={member.role === 'pending' && !member.active} aria-label={member.role === 'pending' ? `Assign an approved role to ${member.name} before activation` : `${member.active ? 'Deactivate' : 'Activate'} ${member.name}`}>
                             {member.active ? <UserRoundX size={15} /> : <Check size={15} />}
-                            {member.role === 'pending' ? 'Assign role first' : member.active ? 'Deactivate' : 'Activate'}
+                            {t(member.role === 'pending' ? 'Assign role first' : member.active ? 'Deactivate' : 'Activate')}
                           </button>
                         </div>
                       </td>
@@ -417,20 +420,20 @@ export function StaffPage() {
           <section ref={modalRef} className="modal-card" role="dialog" aria-modal="true" aria-labelledby="staff-dialog-title" aria-describedby="staff-dialog-description">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">{editing ? 'Account details' : 'New account'}</p>
-                <h3 id="staff-dialog-title">{editing ? 'Edit staff account' : 'Create staff account'}</h3>
-                <p className="form-intro" id="staff-dialog-description">{editing ? 'Update this account’s contact details and access.' : 'Create secure access for a member of your organization.'}</p>
+                <p className="eyebrow">{t(editing ? 'Account details' : 'New account')}</p>
+                <h3 id="staff-dialog-title">{t(editing ? 'Edit staff account' : 'Create staff account')}</h3>
+                <p className="form-intro" id="staff-dialog-description">{t(editing ? 'Update this account’s contact details and access.' : 'Create secure access for a member of your organization.')}</p>
               </div>
-              <button ref={closeButtonRef} className="icon-button" type="button" onClick={requestClose} disabled={saving} aria-label="Close dialog"><X size={18} /></button>
+              <button ref={closeButtonRef} className="icon-button" type="button" onClick={requestClose} disabled={saving} aria-label={t('Close dialog')}><X size={18} /></button>
             </div>
-            {formError && <p className="form-alert" role="alert">{formError}</p>}
+            {formError && <p className="form-alert" role="alert">{t(formError)}</p>}
             <form className="staff-form" onSubmit={handleSubmit} noValidate>
-              <p className="form-section-title">Account details</p>
+              <p className="form-section-title">{t('Account details')}</p>
               <FormField id="staff-name" label="Full name" required error={fieldErrors.name}>
-                {(attrs) => <input {...attrs} autoComplete="name" placeholder="e.g. Aline Mukamana" value={form.name} onChange={(event) => updateFormField('name', event.target.value)} maxLength={120} />}
+                {(attrs) => <input {...attrs} autoComplete="name" placeholder={t('e.g. Aline Mukamana')} value={form.name} onChange={(event) => updateFormField('name', event.target.value)} maxLength={120} />}
               </FormField>
               <FormField id="staff-email" label="Email address" required error={fieldErrors.email}>
-                {(attrs) => <input {...attrs} autoComplete="email" type="email" placeholder="name@organization.org" value={form.email} onChange={(event) => updateFormField('email', event.target.value)} maxLength={254} />}
+                {(attrs) => <input {...attrs} autoComplete="email" type="email" placeholder={t('name@organization.org')} value={form.email} onChange={(event) => updateFormField('email', event.target.value)} maxLength={254} />}
               </FormField>
               <FormField id="staff-phone" label="Phone number" optional error={fieldErrors.phone}>
                 {(attrs) => <input {...attrs} autoComplete="tel" type="tel" placeholder="+250 7XX XXX XXX" value={form.phone} onChange={(event) => updateFormField('phone', event.target.value)} maxLength={32} />}
@@ -475,7 +478,7 @@ export function StaffPage() {
               <div className="modal-actions">
                 <button className="secondary-btn" type="button" onClick={requestClose} disabled={saving}>Cancel</button>
                 <button className="primary-btn" type="submit" disabled={saving}>
-                  {saving ? <InlineLoading>Saving…</InlineLoading> : editing ? 'Save changes' : 'Create account'}
+                  {saving ? <InlineLoading>{t('Saving…')}</InlineLoading> : t(editing ? 'Save changes' : 'Create account')}
                 </button>
               </div>
             </form>

@@ -5,13 +5,14 @@ import { AppLayout } from './components/AppLayout'
 import { AppLoadingError, AppLoadingScreen } from './components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from './auth/roleRoutes'
 import { DashboardPage } from './pages/DashboardPage'
-import { DepartmentPage, DirectorModulePage, SettingsPage } from './pages/DirectorModulePage'
+import { DepartmentPage, DirectorModulePage } from './pages/DirectorModulePage'
 import { LoginPage } from './pages/LoginPage'
 import { MemberDashboardPage } from './pages/MemberDashboardPage'
 import { ParentDashboardPage } from './pages/ParentDashboardPage'
 import { SavingsGroupsPage } from './pages/SavingsGroupsPage'
 import { SignupPage } from './pages/SignupPage'
 import { StaffPage } from './pages/StaffPage'
+import { SystemSettingsPage } from './pages/SystemSettingsPage'
 import { ThemeProvider } from './theme/ThemeProvider'
 
 const MINIMUM_STARTUP_DURATION_MS = 4000
@@ -142,7 +143,7 @@ function ApplicationRoutes() {
               <DirectorModulePage module="audit-logs" />
             </RoleRoute>
           )} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings" element={<SystemSettingsPage />} />
           <Route path="staff" element={(
             <RoleRoute roles={['director']}>
               <StaffPage />

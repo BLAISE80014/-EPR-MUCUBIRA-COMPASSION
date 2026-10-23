@@ -338,6 +338,139 @@ test('valid login honors Remember me and returns a safe member profile', async (
   }
 });
 
+test('authenticated profile updates validate fields and return the saved account details', async () => {
+  const originalFindById = User.findById;
+  const user = {
+    _id: { toString: () => '507f1f77bcf86cd799439011' },
+    name: 'Community Member',
+    email: 'member@example.org',
+    phone: '',
+    passwordHash: await bcrypt.hash('CurrentPassword1', 4),
+    role: 'member',
+    department: 'community',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    save: async function save() {},
+  };
+  User.findById = () => ({
+    select: async (fields) => fields === '+passwordHash'
+      ? user
+      : { ...user, passwordHash: undefined },
+  });
+  const token = jwt.sign({ sub: user._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/profile`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${token}`,
+      },
+      body: JSON.stringify({ name: 'Updated Member', phone: '+250 788 123 456' }),
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.user.name, 'Updated Member');
+    assert.equal(payload.user.phone, '+250 788 123 456');
+    assert.equal(payload.user.email, 'member@example.org');
+    assert.equal(Object.hasOwn(payload.user, 'passwordHash'), false);
+    assert.equal(user.name, 'Updated Member');
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('changing account email requires the current password', async () => {
+  const originalFindById = User.findById;
+  const user = {
+    _id: { toString: () => '507f1f77bcf86cd799439011' },
+    name: 'Community Member',
+    email: 'member@example.org',
+    phone: '',
+    passwordHash: await bcrypt.hash('CurrentPassword1', 4),
+    role: 'member',
+    department: 'community',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    save: async function save() {},
+  };
+  User.findById = () => ({
+    select: async (fields) => fields === '+passwordHash' ? user : { ...user, passwordHash: undefined },
+  });
+  const token = jwt.sign({ sub: user._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/profile`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${token}`,
+      },
+      body: JSON.stringify({ email: 'updated@example.org' }),
+    });
+
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), {
+      message: 'Enter your current password to change your email address.',
+    });
+    assert.equal(user.email, 'member@example.org');
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('authenticated users change passwords only after proving the current password', async () => {
+  const originalFindById = User.findById;
+  const user = {
+    _id: { toString: () => '507f1f77bcf86cd799439011' },
+    name: 'Community Member',
+    email: 'member@example.org',
+    phone: '',
+    passwordHash: await bcrypt.hash('CurrentPassword1', 4),
+    role: 'member',
+    department: 'community',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    save: async function save() {},
+  };
+  User.findById = () => ({
+    select: async (fields) => fields === '+passwordHash' ? user : { ...user, passwordHash: undefined },
+  });
+  const token = jwt.sign({ sub: user._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+
+  try {
+    const deniedResponse = await fetch(`${baseUrl}/api/auth/password`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${token}`,
+      },
+      body: JSON.stringify({ currentPassword: 'wrong', newPassword: 'NewPassword2' }),
+    });
+    assert.equal(deniedResponse.status, 401);
+    assert.equal((await deniedResponse.json()).message, 'Your current password is incorrect.');
+
+    const response = await fetch(`${baseUrl}/api/auth/password`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${token}`,
+      },
+      body: JSON.stringify({ currentPassword: 'CurrentPassword1', newPassword: 'NewPassword2' }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).message, 'Your password has been changed.');
+    assert.equal(await bcrypt.compare('NewPassword2', user.passwordHash), true);
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
 test('login endpoint applies an IP-based rate limit', async () => {
   let response;
   for (let attempt = 0; attempt < 11; attempt += 1) {

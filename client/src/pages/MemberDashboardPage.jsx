@@ -1,24 +1,34 @@
 import { HeartHandshake, UsersRound } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
+import { useTheme } from '../theme/useTheme'
 
 export function MemberDashboardPage() {
   const { user } = useAuth()
+  const { t } = useTheme()
 
   return (
-    <section className="member-dashboard panel">
-      <div className="member-dashboard__icon">
-        <HeartHandshake size={28} aria-hidden="true" />
-      </div>
-      <p className="eyebrow">Community member</p>
-      <h1>Welcome, {user.name}</h1>
-      <p className="page-description">
-        Your account is ready. This community dashboard is intentionally limited;
-        a Director must assign a staff role before organization management tools are available.
-      </p>
-      <div className="member-dashboard__note">
-        <UsersRound size={20} aria-hidden="true" />
-        <span>Thank you for supporting stronger, more compassionate communities.</span>
-      </div>
-    </section>
+    <div className="member-dashboard member-dashboard--workspace">
+      <header className="dashboard-welcome">
+        <div>
+          <p className="eyebrow">{t('Community member')}</p>
+          <h1>{t('Welcome,')} {user.name}</h1>
+          <p className="page-description">{t('Your community workspace and account updates are shown here when they are available.')}</p>
+        </div>
+        <span className="member-dashboard__icon"><HeartHandshake size={25} aria-hidden="true" /></span>
+      </header>
+      <section className="summary-grid parent-dashboard__cards">
+        <article className="summary-card">
+          <div className="summary-card__top"><span>{t('Community updates')}</span><HeartHandshake size={18} aria-hidden="true" /></div>
+          <strong>{t('Not available yet')}</strong>
+          <small>{t('No community updates are connected to your account yet.')}</small>
+        </article>
+        <article className="summary-card">
+          <div className="summary-card__top"><span>{t('Community workspace')}</span><UsersRound size={18} aria-hidden="true" /></div>
+          <strong>{t('Member access')}</strong>
+          <small>{t('Your account does not have staff management permissions.')}</small>
+        </article>
+      </section>
+      <div className="parent-dashboard__note"><UsersRound size={20} aria-hidden="true" /><span>{t('Thank you for supporting stronger, more compassionate communities.')}</span></div>
+    </div>
   )
 }
