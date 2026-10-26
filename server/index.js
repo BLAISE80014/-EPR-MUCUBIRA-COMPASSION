@@ -1,6 +1,7 @@
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const { createApp } = require('./src/app');
+const FinancialYearGuard = require('./src/models/FinancialYearGuard');
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ function getRequiredEnvironment() {
     mongoUri: process.env.MONGODB_URI,
     jwtSecret: process.env.JWT_SECRET,
     clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    accountingCurrency: process.env.ACCOUNTING_BASE_CURRENCY || 'RWF',
     smtp: {
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
@@ -35,6 +37,11 @@ function getRequiredEnvironment() {
 async function start() {
   const config = getRequiredEnvironment();
   await mongoose.connect(config.mongoUri);
+  await FinancialYearGuard.updateOne(
+    { _id: 'calendar-year-creation' },
+    { $setOnInsert: { revision: 0 } },
+    { upsert: true },
+  );
   const app = createApp(config);
 
   app.listen(config.port, () => {

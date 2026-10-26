@@ -5,6 +5,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { AppLayout } from './components/AppLayout'
 import { AppLoadingError, AppLoadingScreen } from './components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from './auth/roleRoutes'
+import { AccountingPage } from './pages/AccountingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DepartmentPage, DirectorModulePage } from './pages/DirectorModulePage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
@@ -110,7 +111,7 @@ function ApplicationRoutes() {
           )} />
           <Route path="accounting" element={(
             <RoleRoute roles={['director', 'accountant']}>
-              <RoleAwareModulePage module="accounting" />
+              <AccountingPage />
             </RoleRoute>
           )} />
           <Route path="health" element={(

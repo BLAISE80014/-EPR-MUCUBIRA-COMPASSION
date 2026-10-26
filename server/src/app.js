@@ -5,11 +5,25 @@ const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const savingsGroupRoutes = require('./routes/savingsGroups');
 const staffRoutes = require('./routes/staff');
+const { router: financeRoutes } = require('./routes/finance');
 const { createPasswordResetEmailSender } = require('./services/passwordResetEmail');
 
 function createApp(config) {
   if (!config?.jwtSecret || Buffer.byteLength(config.jwtSecret, 'utf8') < 32) {
     throw new Error('A JWT secret of at least 32 bytes is required.');
+  }
+  const accountingCurrency = config.accountingCurrency || 'RWF';
+  if (!/^[A-Z]{3}$/.test(accountingCurrency)) {
+    throw new Error('Accounting base currency must be a three-letter uppercase ISO currency code.');
+  }
+  let accountingCurrencyDigits;
+  try {
+    accountingCurrencyDigits = new Intl.NumberFormat('en', {
+      style: 'currency',
+      currency: accountingCurrency,
+    }).resolvedOptions().maximumFractionDigits;
+  } catch {
+    throw new Error('Accounting base currency must be a supported ISO currency code.');
   }
 
   const configuredOrigin = new URL(config.clientOrigin || 'http://localhost:5173');
@@ -29,6 +43,8 @@ function createApp(config) {
   app.locals.jwtSecret = config.jwtSecret;
   app.locals.production = process.env.NODE_ENV === 'production';
   app.locals.clientOrigin = clientOrigin;
+  app.locals.accountingCurrency = accountingCurrency;
+  app.locals.accountingCurrencyDigits = accountingCurrencyDigits;
   app.locals.sendPasswordResetEmail = config.sendPasswordResetEmail
     || createPasswordResetEmailSender(config.smtp);
   app.locals.passwordResetEmailConfigured = Boolean(app.locals.sendPasswordResetEmail);
@@ -62,6 +78,7 @@ function createApp(config) {
   app.use('/api/dashboard', dashboardRoutes);
   app.use('/api/staff', staffRoutes);
   app.use('/api/savings-groups', savingsGroupRoutes);
+  app.use('/api/finance', financeRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ message: 'Endpoint not found.' });
@@ -86,6 +103,13 @@ function createApp(config) {
     if (error?.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0];
       return res.status(409).json({ message: field === 'email' ? 'An account with this email already exists.' : 'This value is already in use.' });
+    }
+
+    if (error?.codeName === 'IllegalOperation'
+      && /Transaction numbers are only allowed on a replica set member or mongos/i.test(error.message || '')) {
+      return res.status(503).json({
+        message: 'Financial writes require MongoDB configured as a replica set or sharded cluster.',
+      });
     }
 
     console.error('Unhandled API error:', error);

@@ -32,6 +32,8 @@ after(async () => {
 });
 
 test('health endpoint reports application and database state', async () => {
+  assert.equal(app.locals.accountingCurrency, 'RWF');
+  assert.equal(app.locals.accountingCurrencyDigits, 0);
   const response = await fetch(`${baseUrl}/api/health`);
 
   assert.equal(response.status, 200);
@@ -253,6 +255,93 @@ test('parents cannot access the organization summary API', async () => {
       headers: { Cookie: `compassion_session=${token}` },
     });
 
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { message: 'You do not have permission to perform this action.' });
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('financial APIs require authentication and exclude community roles', async () => {
+  const anonymousResponse = await fetch(`${baseUrl}/api/finance/years`);
+  assert.equal(anonymousResponse.status, 401);
+
+  const originalFindById = User.findById;
+  const parent = {
+    _id: { toString: () => '507f1f77bcf86cd799439015' },
+    name: 'Parent Account',
+    email: 'finance-parent@example.org',
+    role: 'parent',
+    department: 'community',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  User.findById = () => ({ select: async () => parent });
+
+  try {
+    const token = jwt.sign({ sub: parent._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const response = await fetch(`${baseUrl}/api/finance/years`, {
+      headers: { Cookie: `compassion_session=${token}` },
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { message: 'You do not have permission to perform this action.' });
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('accountants cannot close financial years', async () => {
+  const originalFindById = User.findById;
+  const accountant = {
+    _id: { toString: () => '507f1f77bcf86cd799439016' },
+    name: 'Finance Accountant',
+    email: 'accountant@example.org',
+    role: 'accountant',
+    department: 'accounting',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  User.findById = () => ({ select: async () => accountant });
+
+  try {
+    const token = jwt.sign({ sub: accountant._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const response = await fetch(`${baseUrl}/api/finance/years/not-an-id/close`, {
+      method: 'POST',
+      headers: { Cookie: `compassion_session=${token}` },
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { message: 'You do not have permission to perform this action.' });
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('directors cannot create journal entries that they would need to approve', async () => {
+  const originalFindById = User.findById;
+  const director = {
+    _id: { toString: () => '507f1f77bcf86cd799439017' },
+    name: 'Organization Director',
+    email: 'director@example.org',
+    role: 'director',
+    department: 'organization',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  User.findById = () => ({ select: async () => director });
+
+  try {
+    const token = jwt.sign({ sub: director._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const response = await fetch(`${baseUrl}/api/finance/journal-entries`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${token}`,
+      },
+      body: JSON.stringify({}),
+    });
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { message: 'You do not have permission to perform this action.' });
   } finally {

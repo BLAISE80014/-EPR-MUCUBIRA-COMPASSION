@@ -57,12 +57,9 @@ const DIRECTOR_NAV = [
 const NAV_BY_ROLE = {
   director: DIRECTOR_NAV,
   accountant: [
-    { label: 'Dashboard', path: '/accounting', icon: LayoutDashboard },
     { label: 'Accounting & Finance', path: '/accounting', icon: Wallet },
     { label: 'Saving Group', path: '/savings-groups', icon: HeartHandshake },
-    { label: 'Budget', path: '/budget', icon: Calculator },
-    { label: 'Monthly Report', path: '/monthly-reports', icon: CalendarDays },
-    { label: 'Reports & Analytics', path: '/reports', icon: ChartNoAxesCombined },
+    { label: 'Settings', path: '/settings', icon: Settings },
   ],
   health_officer: [
     { label: 'Dashboard', path: '/health', icon: LayoutDashboard },
@@ -183,7 +180,7 @@ export function AppLayout() {
       : 'Compassion'
   )
   const reportingPeriodVisible = useMemo(
-    () => ['/dashboard', '/accounting', '/health', '/communication'].includes(location.pathname),
+    () => ['/dashboard', '/health', '/communication'].includes(location.pathname),
     [location.pathname],
   )
 

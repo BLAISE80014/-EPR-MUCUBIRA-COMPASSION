@@ -6,12 +6,17 @@ staff accounts, savings-group administration, and role-specific dashboard views.
 
 ## Local setup
 
-Requirements: Node.js 20 or later and a running MongoDB instance.
+Requirements: Node.js 20 or later and MongoDB 4.4 or later. The API's accounting write
+workflows require a transaction-capable replica set; a standalone MongoDB
+server can run the rest of the application but cannot safely write ledger data.
 
 1. Copy `server/.env.example` to `server/.env`.
 2. Set `MONGODB_URI` to the MongoDB database to use and replace all example
    credentials. Generate a unique secret of at least 32 bytes for `JWT_SECRET`
    (for example, `openssl rand -base64 48`). Keep `server/.env` private.
+   For local accounting development, run MongoDB as a single-node replica set,
+   initialize it once with `rs.initiate()` in `mongosh`, and use a URI such as
+   `mongodb://127.0.0.1:27017/epr-mucubira-compassion?replicaSet=rs0`.
 3. Install the backend dependencies, create the Director account, and start the
    API:
 
@@ -119,6 +124,89 @@ after 30 minutes, and can be used once. Responses do not disclose whether an
 email address has an account. New passwords must be at least 12 characters and
 no more than 72 UTF-8 bytes.
 
+## Financial accounting
+
+The Accountant workspace is available at `/accounting` to Accountant and
+Director accounts. Financial years use the organization's confirmed calendar
+year (January 1 through December 31); create the initial year (for example,
+2026) and later years separately from the Financial Years panel. Overlapping
+years are rejected, and creating a later year does not modify earlier records.
+
+The ledger uses accrual double-entry journal entries. Every journal must
+balance in integer minor units; income, expenses, cash, and bank balances are
+derived only from posted entries. Accountants prepare and submit entries.
+Each entry stores its financial-year ID and generated month ID (for example,
+`2026-04`) as well as its transaction date. Directors review and post entries,
+and cannot post their own. They may return a submitted entry with a reason for
+correction. Creators may delete only their own draft entries; submitted and
+posted entries are retained. A closed year cannot accept entries; closing
+requires all draft and submitted entries to be resolved. Reopening requires a
+Director and a recorded reason. Opening cash and bank balances must be entered
+as a balanced opening-balance journal; the application does not infer them.
+
+For first-time setup, an authorized user creates the 2026 year using
+`2026-01-01` and `2026-12-31`, then initializes the starter chart of accounts.
+Review the starter accounts against the organization's approved accounting
+policy before entering live data. Record verified opening balances as a
+balanced `opening_balance` entry. To record a month, prepare income, expense,
+transfer, or adjustment journals dated within the open year, submit each
+entry, and have a different Director post it. Select the year and month in
+Reports to see the posted monthly totals and year-to-date figures. An annual
+report uses the full calendar year and compares with the previous calendar
+year only when that year has been set up.
+
+Configure `ACCOUNTING_BASE_CURRENCY` in `server/.env` before using the ledger.
+It defaults to `RWF` and must be an uppercase three-letter currency code.
+Journal entries must use this configured currency. Changing it after accounts
+or entries exist is not a conversion and requires an approved migration.
+Amounts are stored as safe integer minor units; the API reports the configured
+currency's `minorUnitDigits` (zero for whole RWF francs). The currency selector
+in personal settings is display-only; it does not convert accounting values.
+
+MongoDB transactions protect ledger writes and their audit records, so the
+MongoDB deployment must support transactions (a replica set or sharded cluster;
+standalone MongoDB is not sufficient for financial writes). For a local
+single-machine database, configure MongoDB as a single-node replica set and
+include its replica-set name in `MONGODB_URI` before creating ledger data.
+
+### Financial API
+
+All endpoints require a signed-in Accountant or Director unless noted.
+Authorization is checked by the API, not only by the client.
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/finance/years` | List financial years |
+| `POST /api/finance/years` | Create a non-overlapping calendar year |
+| `POST /api/finance/years/:id/close` | Close a year (Director only) |
+| `POST /api/finance/years/:id/reopen` | Reopen a year with a reason (Director only) |
+| `GET /api/finance/accounts` | List chart-of-account entries |
+| `POST /api/finance/accounts/standard-chart` | Idempotently create the starter chart; creates no transactions |
+| `POST /api/finance/accounts` | Add a chart-of-account entry |
+| `GET /api/finance/journal-entries` | Search paginated entries by year, status, source, date range, or reference/description |
+| `POST /api/finance/journal-entries` | Create a balanced draft journal entry |
+| `POST /api/finance/journal-entries/:id/submit` | Submit the creator's draft for review |
+| `POST /api/finance/journal-entries/:id/return` | Return a submitted entry with a reason (Director only) |
+| `POST /api/finance/journal-entries/:id/approve` | Post a submitted entry (Director only, separate duties enforced) |
+| `POST /api/finance/journal-entries/:id/reverse` | Create a linked, balanced reversal draft without changing the posted original |
+| `DELETE /api/finance/journal-entries/:id` | Delete the creator's own draft only; posted history is never deleted |
+| `GET /api/finance/reports?yearId=…&month=1..12` | Calculate a monthly accrual-ledger summary |
+| `GET /api/finance/reports?yearId=…` | Calculate an annual summary and prior-calendar-year comparison, if available |
+| `GET /api/finance/audit-log` | View paginated finance audit events (Director only) |
+
+Reports distinguish the selected month from year-to-date totals and include
+cash/bank opening, movement, and closing balances. Annual reports contain
+monthly income/expense trends. Transfers between asset accounts do not count
+as income or expense. These are ledger summaries, not a complete statutory
+balance sheet, cash-flow statement, or donor-ready financial report.
+
+The initial finance module does not yet implement separate income/expense
+forms, budgets, asset records or private photo uploads, bank-statement
+reconciliation, report submission/approval, document attachments, or PDF and
+Excel exports. Do not use it as a substitute for those controls or for an
+organization-approved accounting policy. It does not add sample financial
+transactions.
+
 Before production use, publish organization-approved terms and a privacy notice
 and link them from the registration consent.
 
@@ -152,16 +240,13 @@ mongorestore --uri="mongodb://127.0.0.1:27017/epr-mucubira-compassion" "./backup
 Verify the backup and restore process against a non-production database before
 relying on it for recovery.
 
-## Implementation status
+## Other implementation status
 
 The Director workspace now includes a responsive application shell, a live
 department overview based on staff roles, and dedicated routes for budgets,
 monthly reports, analytics, notifications, and audit logs. The available
-backend data sources remain staff accounts, savings-group directory records,
-and the role-scoped organization summary. Finance transactions, health-service
-activity, report submissions, notification records, audit events, dynamic
-department administration, and file exports are not implemented by the API.
-Those screens clearly identify the missing data sources instead of showing
-sample records as live data. Account settings currently display the signed-in
-user's own profile and persist the color-theme preference locally; profile and
-organization edits are not supported.
+backend data sources for non-financial operations remain staff accounts,
+savings-group directory records, and the role-scoped organization summary.
+Health-service activity, general notifications, dynamic department
+administration, and file exports are not implemented by the API. Those screens
+identify missing data sources instead of showing sample records as live data.
