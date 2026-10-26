@@ -185,6 +185,7 @@ Authorization is checked by the API, not only by the client.
 | `POST /api/finance/accounts` | Add a chart-of-account entry |
 | `GET /api/finance/journal-entries` | Search paginated entries by year, status, source, date range, or reference/description |
 | `POST /api/finance/journal-entries` | Create a balanced draft journal entry |
+| `PATCH /api/finance/journal-entries/:id` | Edit the creator's own draft within its original open financial year |
 | `POST /api/finance/journal-entries/:id/submit` | Submit the creator's draft for review |
 | `POST /api/finance/journal-entries/:id/return` | Return a submitted entry with a reason (Director only) |
 | `POST /api/finance/journal-entries/:id/approve` | Post a submitted entry (Director only, separate duties enforced) |

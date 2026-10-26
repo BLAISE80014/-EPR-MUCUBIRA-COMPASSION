@@ -383,6 +383,136 @@ router.post('/journal-entries', requireRoles('accountant'), async (req, res) => 
   return res.status(201).json({ entry });
 });
 
+router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
+  const {
+    reference, entryDate, financialYearId, description, sourceType = 'journal', currency, lines,
+  } = req.body || {};
+  if (typeof reference !== 'string' || !/^[A-Za-z0-9_-]{2,40}$/.test(reference.trim())
+    || !isDateOnly(entryDate) || !mongoose.isValidObjectId(financialYearId)
+    || typeof description !== 'string' || description.trim().length < 3 || description.trim().length > 500
+    || !SOURCE_TYPES.has(sourceType) || !validCurrency(currency, req.app.locals.accountingCurrency)) {
+    return res.status(400).json({ message: `Provide a valid reference, date, description, source type, and configured base currency (${req.app.locals.accountingCurrency}).` });
+  }
+  const linesError = validateJournalLines(lines);
+  if (linesError) return res.status(400).json({ message: linesError });
+  const date = new Date(`${entryDate}T00:00:00.000Z`);
+  const accountIds = lines.map((line) => line.accountId);
+  if (accountIds.some((id) => !mongoose.isValidObjectId(id))) {
+    return res.status(400).json({ message: 'Select a valid account for every journal line.' });
+  }
+  const uniqueAccountIds = [...new Set(accountIds)];
+  let errorStatus = 0;
+  let errorMessage = '';
+  const entry = await withTransaction(async (session) => {
+    const found = await JournalEntry.findById(req.params.id).session(session);
+    if (!found) {
+      errorStatus = 404;
+      errorMessage = 'Journal entry not found.';
+      return null;
+    }
+    if (String(found.createdBy) !== String(req.user._id)) {
+      errorStatus = 403;
+      errorMessage = 'Only the creator can edit this journal entry.';
+      return null;
+    }
+    if (found.status !== 'draft') {
+      errorStatus = 409;
+      errorMessage = 'Only a draft journal entry can be edited.';
+      return null;
+    }
+    if (String(found.financialYear) !== financialYearId) {
+      errorStatus = 400;
+      errorMessage = 'A draft journal entry cannot be moved to another financial year.';
+      return null;
+    }
+    const year = await FinancialYear.findById(financialYearId).session(session);
+    if (!year || year.status !== 'open') {
+      errorStatus = 409;
+      errorMessage = 'Select an existing open financial year.';
+      return null;
+    }
+    if (date < year.startDate || date > year.endDate) {
+      errorStatus = 400;
+      errorMessage = 'The journal date must fall within the selected financial year.';
+      return null;
+    }
+    if (sourceType === 'opening_balance' && date.getTime() !== year.startDate.getTime()) {
+      errorStatus = 400;
+      errorMessage = 'Opening balances must be dated on the first day of the financial year.';
+      return null;
+    }
+    const duplicate = await JournalEntry.exists({
+      reference: reference.trim().toUpperCase(),
+      _id: { $ne: found._id },
+    }).session(session);
+    if (duplicate) {
+      errorStatus = 409;
+      errorMessage = 'A journal entry already uses this reference.';
+      return null;
+    }
+    const accounts = await FinancialAccount.find({ _id: { $in: uniqueAccountIds }, active: true }).session(session);
+    if (accounts.length !== uniqueAccountIds.length || accounts.some((account) => account.currency !== currency)) {
+      errorStatus = 400;
+      errorMessage = 'All journal lines must reference active accounts in the configured base currency.';
+      return null;
+    }
+    const compositionError = validateJournalComposition(sourceType, lines, accounts);
+    if (compositionError) {
+      errorStatus = 400;
+      errorMessage = compositionError;
+      return null;
+    }
+    const before = {
+      reference: found.reference,
+      entryDate: found.entryDate,
+      financialYear: String(found.financialYear),
+      description: found.description,
+      sourceType: found.sourceType,
+      lines: found.lines.map((line) => ({
+        account: String(line.account),
+        debitMinor: line.debitMinor,
+        creditMinor: line.creditMinor,
+        description: line.description,
+      })),
+    };
+    await touchFinancialYear(year, session);
+    found.reference = reference.trim().toUpperCase();
+    found.entryDate = date;
+    found.financialYear = year._id;
+    found.periodId = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    found.description = description.trim();
+    found.sourceType = sourceType;
+    found.currency = currency;
+    found.lines = lines.map((line) => ({
+      account: line.accountId,
+      debitMinor: line.debitMinor,
+      creditMinor: line.creditMinor,
+      description: typeof line.description === 'string' ? line.description.trim().slice(0, 300) : '',
+    }));
+    await found.save({ session });
+    await audit(req.user, 'journal_entry.draft_updated', 'journal_entry', found._id, {
+      before,
+      after: {
+        reference: found.reference,
+        entryDate: found.entryDate,
+        financialYear: String(found.financialYear),
+        description: found.description,
+        sourceType: found.sourceType,
+        lines: found.lines.map((line) => ({
+          account: String(line.account),
+          debitMinor: line.debitMinor,
+          creditMinor: line.creditMinor,
+          description: line.description,
+        })),
+      },
+    }, '', session);
+    return found;
+  });
+  if (errorStatus) return res.status(errorStatus).json({ message: errorMessage });
+  return res.json({ entry });
+});
+
 router.post('/journal-entries/:id/submit', requireRoles('accountant'), async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   let errorStatus = 0;

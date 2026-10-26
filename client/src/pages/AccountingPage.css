@@ -109,6 +109,11 @@
 .accounting-filters { align-items: center; display: flex; gap: 10px; }
 .accounting-filters label { color: #617288; font-size: .83rem; font-weight: 620; }
 .accounting-filters select { min-height: 36px; }
+.accounting-filters--wide { align-items: flex-end; flex-wrap: wrap; }
+.accounting-filters--wide label { display: grid; gap: 5px; }
+.accounting-filters--wide input,
+.accounting-filters--wide select { background: #fff; border: 1px solid #cbd5e1; border-radius: 7px; color: var(--accounting-ink); font: inherit; min-height: 36px; padding: 7px 9px; }
+.accounting-filters--wide label:first-child { flex: 1 1 210px; }
 .accounting-table-wrap { background: #fff; border: 1px solid var(--accounting-border); border-radius: 9px; max-width: 100%; overflow-x: auto; }
 .accounting-table { border-collapse: collapse; min-width: 670px; text-align: left; width: 100%; }
 .accounting-table th { background: #f7f9fc; color: #607187; font-size: .74rem; font-weight: 730; letter-spacing: .035em; padding: 12px 14px; text-transform: uppercase; white-space: nowrap; }
@@ -116,6 +121,10 @@
 .accounting-table td:first-child strong, .accounting-table td:first-child span { display: block; }
 .accounting-table td:first-child strong { color: #263b55; }
 .accounting-table td:first-child span { color: #718197; font-size: .8rem; margin-top: 3px; max-width: 370px; overflow: hidden; text-overflow: ellipsis; }
+.accounting-table .accounting-review-comment { color: #a34839 !important; white-space: normal; }
+.accounting-row-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 5px; }
+.accounting-pagination { align-items: center; color: var(--accounting-muted); display: flex; font-size: .83rem; justify-content: space-between; }
+.accounting-pagination > div { display: flex; gap: 8px; }
 .accounting-capitalize { text-transform: capitalize; }
 .accounting-empty { align-items: center; background: #fbfcfe; border: 1px dashed #d7e0eb; border-radius: 10px; color: #718197; display: flex; flex-direction: column; gap: 8px; padding: 34px 20px; text-align: center; }
 .accounting-empty svg { color: #6687b4; }
@@ -141,6 +150,11 @@
 
 .accounting-year-list { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .accounting-year-card { align-items: center; background: #fff; border: 1px solid var(--accounting-border); border-radius: 9px; display: flex; gap: 13px; min-width: 0; padding: 14px; }
+.accounting-year-actions { display: flex; flex: 0 0 auto; }
+.accounting-comparison { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 14px; }
+.accounting-comparison > div { align-items: flex-start; border-top: 1px solid #edf1f6; display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
+.accounting-comparison dt { color: #607187; font-size: .82rem; }
+.accounting-comparison dd { color: #253b56; font-size: .9rem; font-weight: 680; margin: 0; }
 .accounting-year-icon { align-items: center; background: #eff6ff; border-radius: 8px; color: var(--accounting-blue); display: flex; flex: 0 0 38px; height: 38px; justify-content: center; }
 .accounting-year-details { display: grid; flex: 1; gap: 3px; min-width: 0; }
 .accounting-year-details strong { color: #2d425d; }
@@ -184,8 +198,67 @@
   .accounting-lines-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
   .accounting-filters { align-items: flex-start; flex-direction: column; }
   .accounting-report-meta { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .accounting-year-card { align-items: flex-start; flex-wrap: wrap; }
+  .accounting-year-details { flex-basis: calc(100% - 56px); }
+  .accounting-year-actions { margin-left: auto; }
+  .accounting-comparison { grid-template-columns: minmax(0, 1fr); }
+  .accounting-pagination { align-items: flex-start; flex-direction: column; gap: 10px; }
   .accounting-table { min-width: 630px; }
 }
+
+html[data-theme='dark'] .accounting-page {
+  --accounting-ink: #e3e9f2;
+  --accounting-muted: #a3afc0;
+  --accounting-border: #39475a;
+  --accounting-panel: #202c3a;
+  color: var(--accounting-ink);
+}
+
+html[data-theme='dark'] .accounting-heading h1,
+html[data-theme='dark'] .accounting-section-heading h2,
+html[data-theme='dark'] .accounting-panel-heading h3,
+html[data-theme='dark'] .accounting-panel > h3,
+html[data-theme='dark'] .accounting-metric > strong,
+html[data-theme='dark'] .accounting-summary-list dd,
+html[data-theme='dark'] .accounting-comparison dd,
+html[data-theme='dark'] .accounting-empty strong,
+html[data-theme='dark'] .accounting-year-details strong,
+html[data-theme='dark'] .accounting-table td:first-child strong { color: #e3e9f2; }
+html[data-theme='dark'] .accounting-currency,
+html[data-theme='dark'] .accounting-year-icon,
+html[data-theme='dark'] .accounting-metric-icon,
+html[data-theme='dark'] .accounting-callout { background: #263b54; color: #a9ccff; }
+html[data-theme='dark'] .accounting-panel,
+html[data-theme='dark'] .accounting-metric,
+html[data-theme='dark'] .accounting-year-card,
+html[data-theme='dark'] .accounting-table-wrap { background: #202c3a; }
+html[data-theme='dark'] .accounting-table th,
+html[data-theme='dark'] .accounting-loading,
+html[data-theme='dark'] .accounting-disclaimer,
+html[data-theme='dark'] .accounting-empty,
+html[data-theme='dark'] .accounting-line,
+html[data-theme='dark'] .accounting-form input,
+html[data-theme='dark'] .accounting-form select,
+html[data-theme='dark'] .accounting-filters--wide input,
+html[data-theme='dark'] .accounting-filters--wide select,
+html[data-theme='dark'] .accounting-year-select select,
+html[data-theme='dark'] .accounting-month-select select,
+html[data-theme='dark'] .accounting-filters select { background: #182331; border-color: #435269; color: #e3e9f2; }
+html[data-theme='dark'] .accounting-table td,
+html[data-theme='dark'] .accounting-summary-list > div,
+html[data-theme='dark'] .accounting-trend > div,
+html[data-theme='dark'] .accounting-comparison > div { border-color: #354357; color: #c1ccda; }
+html[data-theme='dark'] .accounting-table th,
+html[data-theme='dark'] .accounting-table td,
+html[data-theme='dark'] .accounting-year-details span,
+html[data-theme='dark'] .accounting-form-grid label,
+html[data-theme='dark'] .accounting-line label,
+html[data-theme='dark'] .accounting-filters label,
+html[data-theme='dark'] .accounting-summary-list dt { color: #afbdce; }
+html[data-theme='dark'] .accounting-basis,
+html[data-theme='dark'] .accounting-muted { color: #a3afc0; }
+html[data-theme='dark'] .accounting-report-meta span { background: #26364a; }
+html[data-theme='dark'] .accounting-btn--secondary { background: #26364a; border-color: #485c76; color: #d2e2f7; }
 
 @media (prefers-reduced-motion: reduce) {
   .accounting-btn { transition: none; }
