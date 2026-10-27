@@ -66,7 +66,7 @@ const DASHBOARD_COPY = {
 const MODULE_LINKS = [
   { label: 'Departments', description: 'Team structure and staffing', to: '/departments', icon: Building2, roles: ['director'] },
   { label: 'Staff & Users', description: 'Manage staff access', to: '/staff', icon: UsersRound, roles: ['director'] },
-  { label: 'Saving Group', description: 'View registered groups', to: '/savings-groups', icon: HeartHandshake, roles: ['director', 'accountant', 'savings_group_manager'] },
+  { label: 'Saving Group', description: 'View registered groups', to: '/savings-groups', icon: HeartHandshake, roles: ['director', 'savings_group_manager'] },
   { label: 'Budget', description: 'Budget records are not connected', to: '/budget', icon: Wallet, roles: ['director', 'accountant'] },
   { label: 'Monthly Report', description: 'Reporting workflows are not connected', to: '/monthly-reports', icon: FileText, roles: ['director', 'accountant', 'health_officer', 'communication_officer', 'savings_group_manager'] },
   { label: 'Health Service', description: 'Health records are not connected', to: '/health', icon: HeartPulse, roles: ['director', 'health_officer'] },
@@ -239,7 +239,7 @@ export function DashboardPage() {
                 <div><strong>{t(user.role === 'director' ? 'Staff and department roles' : 'Your role and department')}</strong><small>{t('Connected to current active user records')}</small></div>
                 <span className="availability-label">{t('Connected')}</span>
               </div>
-              {(user.role === 'director' || user.role === 'accountant' || user.role === 'savings_group_manager') && <div className="availability-row">
+              {(user.role === 'director' || user.role === 'savings_group_manager') && <div className="availability-row">
                 <span className="availability-mark availability-mark--on"><HeartHandshake size={16} /></span>
                 <div><strong>{t('Saving group directory')}</strong><small>{t('Names, IDs, status, and manager assignments')}</small></div>
                 <span className="availability-label">{t('Connected')}</span>

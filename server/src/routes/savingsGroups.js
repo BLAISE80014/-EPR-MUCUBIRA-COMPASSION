@@ -6,7 +6,7 @@ const { publicUser, requireAuth, requireRoles } = require('../middleware/auth');
 
 const router = express.Router();
 const GROUP_CODE_PATTERN = /^[A-Z0-9_-]{2,32}$/;
-const GROUP_ACCESS_ROLES = ['director', 'accountant', 'savings_group_manager'];
+const GROUP_ACCESS_ROLES = ['director', 'savings_group_manager'];
 
 router.use(requireAuth, requireRoles(...GROUP_ACCESS_ROLES));
 

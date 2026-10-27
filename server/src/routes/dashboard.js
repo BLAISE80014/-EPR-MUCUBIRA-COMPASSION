@@ -33,7 +33,9 @@ router.get(
       User.countDocuments(staffFilter),
       isGroupManager
         ? SavingsGroup.countDocuments({ _id: { $in: req.user.groupIds }, active: true })
-        : SavingsGroup.countDocuments({ active: true }),
+        : isDirector
+          ? SavingsGroup.countDocuments({ active: true })
+          : Promise.resolve(undefined),
       isDirector
         ? User.aggregate([
           { $match: { active: true, role: { $ne: 'director' } } },

@@ -64,7 +64,6 @@ const NAV_BY_ROLE = {
     { label: 'Financial Year Setup', path: '/accountant/setup', icon: CalendarDays },
     { label: 'Assets & Projects', path: '/accounting/operations', icon: BriefcaseBusiness },
     { label: 'Financial Reports', path: '/accounting/reports', icon: ChartNoAxesCombined },
-    { label: 'Saving Group', path: '/savings-groups', icon: HeartHandshake },
     { label: 'Settings', path: '/settings', icon: Settings },
   ],
   health_officer: [

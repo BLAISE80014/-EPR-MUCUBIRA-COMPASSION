@@ -205,7 +205,7 @@ function ApplicationRoutes() {
             </RoleRoute>
           )} />
           <Route path="savings-groups" element={(
-            <RoleRoute roles={['director', 'accountant', 'savings_group_manager']}>
+            <RoleRoute roles={['director', 'savings_group_manager']}>
               <SavingsGroupsPage />
             </RoleRoute>
           )} />
