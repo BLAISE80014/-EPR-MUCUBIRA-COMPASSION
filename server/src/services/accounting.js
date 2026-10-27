@@ -1,5 +1,6 @@
 const ACCOUNT_TYPES = new Set(['asset', 'liability', 'equity', 'revenue', 'expense']);
 const SOURCE_TYPES = new Set(['income', 'expense', 'transfer', 'adjustment', 'opening_balance', 'journal']);
+const PAYMENT_METHODS = new Set(['', 'cash', 'bank_transfer', 'mobile_money', 'other']);
 
 function safeAdd(first, second) {
   const result = BigInt(first) + BigInt(second);
@@ -36,6 +37,39 @@ function validateJournalLines(lines) {
     }
   }
   return debits === credits ? null : 'Total debits must equal total credits.';
+}
+
+function validateJournalMetadata({ reference, entryDate, description, sourceType, currency }, baseCurrency) {
+  if (typeof reference !== 'string' || !/^[A-Za-z0-9_-]{2,40}$/.test(reference.trim())) {
+    return 'Reference must be 2-40 characters and use only letters, numbers, hyphens, or underscores.';
+  }
+  if (typeof entryDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(entryDate)
+    || Number.isNaN(Date.parse(`${entryDate}T00:00:00.000Z`))
+    || new Date(`${entryDate}T00:00:00.000Z`).toISOString().slice(0, 10) !== entryDate) {
+    return 'Enter a valid entry date in YYYY-MM-DD format.';
+  }
+  if (typeof description !== 'string' || description.trim().length < 3 || description.trim().length > 500) {
+    return 'Description must be between 3 and 500 characters.';
+  }
+  if (!SOURCE_TYPES.has(sourceType)) {
+    return 'Choose a valid source type: journal, income, expense, transfer, adjustment, or opening balance.';
+  }
+  if (currency !== baseCurrency) {
+    return `Currency must match the configured base currency (${baseCurrency}).`;
+  }
+  return null;
+}
+
+function validateJournalDetails({ paymentMethod = '', counterparty = '', projectReference = '', supportingDocumentUrl = '', notes = '' }) {
+  if (!PAYMENT_METHODS.has(paymentMethod)) return 'Choose a valid payment method.';
+  if (typeof counterparty !== 'string' || counterparty.length > 120) return 'Source or recipient must be 120 characters or fewer.';
+  if (typeof projectReference !== 'string' || projectReference.length > 120) return 'Project reference must be 120 characters or fewer.';
+  if (typeof supportingDocumentUrl !== 'string' || supportingDocumentUrl.length > 500) return 'Supporting document link must be 500 characters or fewer.';
+  if (supportingDocumentUrl && !/^https?:\/\/\S+$/i.test(supportingDocumentUrl)) {
+    return 'Supporting document must be a valid HTTPS or HTTP link.';
+  }
+  if (typeof notes !== 'string' || notes.length > 500) return 'Notes must be 500 characters or fewer.';
+  return null;
 }
 
 function validateJournalComposition(sourceType, lines, accounts) {
@@ -136,7 +170,9 @@ module.exports = {
   accountBalanceMinor,
   safeAdd,
   safeSubtract,
+  validateJournalDetails,
   summarizePostedEntries,
+  validateJournalMetadata,
   validateJournalComposition,
   validateJournalLines,
   yearDates,

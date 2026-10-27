@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { after, before, test } = require('node:test');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { createApp } = require('../src/app');
+const { createApp, isUnsupportedMongoTransaction } = require('../src/app');
 const authRoutes = require('../src/routes/auth');
 const User = require('../src/models/User');
 
@@ -38,6 +38,19 @@ test('health endpoint reports application and database state', async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', database: 'disconnected' });
+});
+
+test('unsupported MongoDB transactions are classified for a useful response', () => {
+  assert.equal(isUnsupportedMongoTransaction({
+    code: 20,
+    codeName: 'IllegalOperation',
+    message: 'Transaction numbers are only allowed on a replica set member or mongos',
+  }), true);
+  assert.equal(isUnsupportedMongoTransaction({
+    code: 11000,
+    codeName: 'DuplicateKey',
+    message: 'Duplicate key',
+  }), false);
 });
 
 test('protected session endpoint rejects unauthenticated requests', async () => {
@@ -265,6 +278,8 @@ test('parents cannot access the organization summary API', async () => {
 test('financial APIs require authentication and exclude community roles', async () => {
   const anonymousResponse = await fetch(`${baseUrl}/api/finance/years`);
   assert.equal(anonymousResponse.status, 401);
+  const anonymousCapabilities = await fetch(`${baseUrl}/api/finance/capabilities`);
+  assert.equal(anonymousCapabilities.status, 401);
 
   const originalFindById = User.findById;
   const parent = {
@@ -344,6 +359,86 @@ test('directors cannot create journal entries that they would need to approve', 
     });
     assert.equal(response.status, 403);
     assert.deepEqual(await response.json(), { message: 'You do not have permission to perform this action.' });
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('finance management APIs enforce accountant writes and validate performance filters', async () => {
+  const originalFindById = User.findById;
+  const makeUser = (role, id) => ({
+    _id: { toString: () => id },
+    name: `Finance ${role}`,
+    email: `${role}-${id}@example.org`,
+    role,
+    department: 'accounting',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  });
+  const director = makeUser('director', '507f1f77bcf86cd799439020');
+  const accountant = makeUser('accountant', '507f1f77bcf86cd799439021');
+
+  try {
+    User.findById = () => ({ select: async () => director });
+    const directorToken = jwt.sign({ sub: director._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const forbiddenWrite = await fetch(`${baseUrl}/api/finance/management/assets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `compassion_session=${directorToken}`,
+      },
+      body: JSON.stringify({}),
+    });
+    assert.equal(forbiddenWrite.status, 403);
+
+    User.findById = () => ({ select: async () => accountant });
+    const accountantToken = jwt.sign({ sub: accountant._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const invalidFilter = await fetch(`${baseUrl}/api/finance/management/performance?year=1900`, {
+      headers: { Cookie: `compassion_session=${accountantToken}` },
+    });
+    assert.equal(invalidFilter.status, 400);
+    assert.match((await invalidFilter.json()).message, /report year is invalid/);
+  } finally {
+    User.findById = originalFindById;
+  }
+});
+
+test('finance report date filters validate daily and custom periods', async () => {
+  const originalFindById = User.findById;
+  const accountant = {
+    _id: { toString: () => '507f1f77bcf86cd799439018' },
+    name: 'Finance Accountant',
+    email: 'accountant-report@example.org',
+    role: 'accountant',
+    department: 'accounting',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+  User.findById = () => ({ select: async () => accountant });
+
+  try {
+    const token = jwt.sign({ sub: accountant._id.toString() }, app.locals.jwtSecret, { algorithm: 'HS256' });
+    const cookie = `compassion_session=${token}`;
+    const yearId = '507f1f77bcf86cd799439019';
+    const invalidDay = await fetch(`${baseUrl}/api/finance/reports?yearId=${yearId}&date=2026-02-30`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(invalidDay.status, 400);
+    assert.match((await invalidDay.json()).message, /valid date/);
+
+    const incompleteRange = await fetch(`${baseUrl}/api/finance/reports?yearId=${yearId}&from=2026-01-01`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(incompleteRange.status, 400);
+    assert.match((await incompleteRange.json()).message, /valid date range/);
+
+    const conflictingFilters = await fetch(`${baseUrl}/api/finance/reports?yearId=${yearId}&month=1&date=2026-01-01`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(conflictingFilters.status, 400);
+    assert.match((await conflictingFilters.json()).message, /full year, month, day, or custom date range/);
   } finally {
     User.findById = originalFindById;
   }

@@ -1,6 +1,6 @@
 export const HOME_PATH_BY_ROLE = {
   director: '/dashboard',
-  accountant: '/accounting',
+  accountant: '/accountant-dashboard',
   health_officer: '/health',
   communication_officer: '/communication',
   savings_group_manager: '/savings-groups',

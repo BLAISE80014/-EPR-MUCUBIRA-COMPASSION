@@ -6,7 +6,13 @@ const dashboardRoutes = require('./routes/dashboard');
 const savingsGroupRoutes = require('./routes/savingsGroups');
 const staffRoutes = require('./routes/staff');
 const { router: financeRoutes } = require('./routes/finance');
+const financeManagementRoutes = require('./routes/financeManagement');
 const { createPasswordResetEmailSender } = require('./services/passwordResetEmail');
+
+function isUnsupportedMongoTransaction(error) {
+  return (error?.code === 20 || error?.codeName === 'IllegalOperation')
+    && /transaction numbers are only allowed on a replica set member or mongos/i.test(error.message || '');
+}
 
 function createApp(config) {
   if (!config?.jwtSecret || Buffer.byteLength(config.jwtSecret, 'utf8') < 32) {
@@ -79,6 +85,7 @@ function createApp(config) {
   app.use('/api/staff', staffRoutes);
   app.use('/api/savings-groups', savingsGroupRoutes);
   app.use('/api/finance', financeRoutes);
+  app.use('/api/finance/management', financeManagementRoutes);
 
   app.use((req, res) => {
     res.status(404).json({ message: 'Endpoint not found.' });
@@ -105,10 +112,9 @@ function createApp(config) {
       return res.status(409).json({ message: field === 'email' ? 'An account with this email already exists.' : 'This value is already in use.' });
     }
 
-    if (error?.codeName === 'IllegalOperation'
-      && /Transaction numbers are only allowed on a replica set member or mongos/i.test(error.message || '')) {
+    if (isUnsupportedMongoTransaction(error)) {
       return res.status(503).json({
-        message: 'Financial writes require MongoDB configured as a replica set or sharded cluster.',
+        message: 'MongoDB is running as a standalone server. Financial writes require a transaction-capable replica set or sharded cluster. Configure MongoDB as a single-node replica set and restart it; see the Financial Accounting setup in README.md.',
       });
     }
 
@@ -119,4 +125,4 @@ function createApp(config) {
   return app;
 }
 
-module.exports = { createApp };
+module.exports = { createApp, isUnsupportedMongoTransaction };

@@ -57,7 +57,13 @@ const DIRECTOR_NAV = [
 const NAV_BY_ROLE = {
   director: DIRECTOR_NAV,
   accountant: [
-    { label: 'Accounting & Finance', path: '/accounting', icon: Wallet },
+    { label: 'Dashboard', path: '/accountant-dashboard', icon: LayoutDashboard },
+    { label: 'Record Income', path: '/accountant/income', icon: Wallet },
+    { label: 'Record Expense', path: '/accountant/expense', icon: Calculator },
+    { label: 'Transaction History', path: '/accountant/transactions', icon: Activity },
+    { label: 'Financial Year Setup', path: '/accountant/setup', icon: CalendarDays },
+    { label: 'Assets & Projects', path: '/accounting/operations', icon: BriefcaseBusiness },
+    { label: 'Financial Reports', path: '/accounting/reports', icon: ChartNoAxesCombined },
     { label: 'Saving Group', path: '/savings-groups', icon: HeartHandshake },
     { label: 'Settings', path: '/settings', icon: Settings },
   ],
@@ -80,13 +86,23 @@ const NAV_BY_ROLE = {
 }
 
 const PAGE_TITLES = Object.fromEntries(
-  DIRECTOR_NAV.map(({ label, path }) => [path, label]),
+  [...DIRECTOR_NAV,
+    { label: 'Dashboard', path: '/accountant-dashboard' },
+    { label: 'Record Income', path: '/accountant/income' },
+    { label: 'Record Expense', path: '/accountant/expense' },
+    { label: 'Transaction History', path: '/accountant/transactions' },
+    { label: 'Financial Year Setup', path: '/accountant/setup' },
+    { label: 'Chart of Accounts', path: '/accounting/accounts' },
+    { label: 'Transactions', path: '/accounting/transactions' },
+    { label: 'Assets & Projects', path: '/accounting/operations' },
+    { label: 'Financial Reports', path: '/accounting/reports' }]
+    .map(({ label, path }) => [path, label]),
 )
 
 const NAV_GROUPS = [
-  { label: 'Main menu', paths: ['/dashboard', '/departments', '/staff', '/member-dashboard', '/parent-dashboard'] },
-  { label: 'Operations', paths: ['/accounting', '/health', '/communication', '/savings-groups', '/budget'] },
-  { label: 'Reporting', paths: ['/monthly-reports', '/reports'] },
+  { label: 'Main menu', paths: ['/dashboard', '/accountant-dashboard', '/departments', '/staff', '/member-dashboard', '/parent-dashboard'] },
+  { label: 'Operations', paths: ['/accounting', '/accounting/accounts', '/accounting/transactions', '/accounting/operations', '/accountant/income', '/accountant/expense', '/accountant/transactions', '/accountant/setup', '/health', '/communication', '/savings-groups', '/budget'] },
+  { label: 'Reporting', paths: ['/monthly-reports', '/reports', '/accounting/reports'] },
   { label: 'System', paths: ['/notifications', '/audit-logs', '/settings'] },
 ]
 

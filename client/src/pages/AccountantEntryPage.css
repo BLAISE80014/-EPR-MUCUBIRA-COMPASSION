@@ -1,0 +1,111 @@
+.accountant-entry,
+.accountant-history {
+  color: #1d2b3d;
+  display: grid;
+  gap: 20px;
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: 8px 0 36px;
+}
+
+.accountant-entry *,
+.accountant-history * { box-sizing: border-box; }
+
+.accountant-entry__header,
+.accountant-history__header {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.accountant-entry__header h1,
+.accountant-history__header h1 {
+  color: #1d2f49;
+  font-size: clamp(1.7rem, 3vw, 2.2rem);
+  letter-spacing: -.04em;
+  margin: 4px 0 6px;
+}
+
+.accountant-entry__header p:not(.accountant-entry__eyebrow),
+.accountant-history__header span { color: #6b7b90; margin: 0; }
+.accountant-entry__eyebrow,
+.accountant-history__header > div:first-child > p { color: #3978df; font-size: .73rem; font-weight: 750; letter-spacing: .12em; margin: 0; text-transform: uppercase; }
+.accountant-entry__header > a { color: #3978df; font-size: .82rem; font-weight: 700; text-decoration: none; }
+.accountant-entry__loading { color: #6b7b90; padding: 30px; text-align: center; }
+
+.accountant-entry__layout { align-items: start; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.6fr) minmax(270px, .75fr); }
+.accountant-entry__form-panel,
+.accountant-entry__aside,
+.accountant-history__panel { background: #fff; border: 1px solid #e3eaf2; border-radius: 16px; box-shadow: 0 10px 28px rgba(27, 44, 66, .045); }
+.accountant-entry__form-panel { padding: clamp(18px, 3vw, 28px); }
+.accountant-entry__form-heading { align-items: center; display: flex; gap: 12px; margin-bottom: 22px; }
+.accountant-entry__icon { align-items: center; background: #e8f7ef; border-radius: 12px; color: #1e8a56; display: flex; height: 46px; justify-content: center; width: 46px; }
+.accountant-entry__form-panel--expense .accountant-entry__icon { background: #fff0ec; color: #ca6043; }
+.accountant-entry__form-heading h2,
+.accountant-entry__aside h2 { color: #263c57; font-size: 1.05rem; margin: 0 0 4px; }
+.accountant-entry__form-heading p { color: #718197; font-size: .8rem; margin: 0; }
+.accountant-entry__form-panel form { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.accountant-entry__form-panel label { color: #52657d; display: grid; font-size: .77rem; font-weight: 650; gap: 6px; }
+.accountant-entry__form-panel input,
+.accountant-entry__form-panel select,
+.accountant-entry__form-panel textarea,
+.accountant-entry__aside select { background: #fff; border: 1px solid #dce4ef; border-radius: 9px; color: #263c57; font: inherit; min-height: 42px; padding: 9px 11px; width: 100%; }
+.accountant-entry__form-panel textarea { min-height: 90px; resize: vertical; }
+.accountant-entry__full { grid-column: 1 / -1; }
+.accountant-entry__actions { align-items: center; display: flex; flex-wrap: wrap; gap: 14px; grid-column: 1 / -1; justify-content: space-between; margin-top: 6px; }
+.accountant-entry__actions button,
+.accountant-history__actions button { align-items: center; background: #2463d7; border: 1px solid #2463d7; border-radius: 9px; color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: .82rem; font-weight: 700; gap: 8px; justify-content: center; min-height: 42px; padding: 0 16px; }
+.accountant-entry__actions button:disabled,
+.accountant-history__actions button:disabled { cursor: not-allowed; opacity: .55; }
+.accountant-entry__actions a { color: #3978df; font-size: .8rem; font-weight: 700; text-decoration: none; }
+.accountant-entry__aside { background: linear-gradient(155deg, #f8fbff, #eef5ff); padding: 22px; }
+.accountant-entry__aside h2 { font-size: 1.2rem; margin: 8px 0 12px; }
+.accountant-entry__aside ol { color: #52657d; display: grid; font-size: .82rem; gap: 12px; line-height: 1.55; margin: 0 0 22px; padding-left: 20px; }
+.accountant-entry__aside > p:not(.accountant-entry__eyebrow) { color: #718197; font-size: .75rem; font-weight: 700; margin: 16px 0 6px; }
+.accountant-entry__aside > strong { color: #263c57; font-size: 1.35rem; }
+.accountant-entry__message { align-items: center; border-radius: 9px; display: flex; gap: 9px; padding: 12px 14px; }
+.accountant-entry__message--error,
+.accountant-history__error { background: #fff1f0; border: 1px solid #f2c9c5; color: #8c3932; }
+.accountant-entry__message--success { background: #eaf8ee; border: 1px solid #b7e2c0; color: #236b42; }
+.accountant-entry__message a { color: inherit; font-weight: 750; }
+.accountant-entry__setup { align-items: center; background: #fff8e9; border: 1px solid #f0dfb6; border-radius: 10px; display: flex; flex-wrap: wrap; gap: 14px; justify-content: space-between; margin-bottom: 16px; padding: 14px; }
+.accountant-entry__setup > div { display: grid; gap: 4px; max-width: 560px; }
+.accountant-entry__setup strong { color: #76521a; font-size: .82rem; }
+.accountant-entry__setup span { color: #806d4d; font-size: .76rem; line-height: 1.45; }
+.accountant-entry__setup button { background: #9a6a11; border: 0; border-radius: 8px; color: #fff; cursor: pointer; font: inherit; font-size: .77rem; font-weight: 700; min-height: 38px; padding: 0 12px; }
+.accountant-entry__setup button:disabled { cursor: wait; opacity: .6; }
+
+html[data-theme='dark'] .accountant-entry,
+html[data-theme='dark'] .accountant-history { color: #e3e9f2; }
+html[data-theme='dark'] .accountant-entry__header h1,
+html[data-theme='dark'] .accountant-history__header h1,
+html[data-theme='dark'] .accountant-entry__form-heading h2,
+html[data-theme='dark'] .accountant-entry__aside h2,
+html[data-theme='dark'] .accountant-entry__aside > strong { color: #e3e9f2; }
+html[data-theme='dark'] .accountant-entry__form-panel,
+html[data-theme='dark'] .accountant-entry__aside { background: #202c3a; border-color: #354357; }
+html[data-theme='dark'] .accountant-entry__form-panel label { color: #bdc9d8; }
+html[data-theme='dark'] .accountant-entry__form-panel input,
+html[data-theme='dark'] .accountant-entry__form-panel select,
+html[data-theme='dark'] .accountant-entry__form-panel textarea,
+html[data-theme='dark'] .accountant-entry__aside select { background: #182331; border-color: #435269; color: #e3e9f2; }
+html[data-theme='dark'] .accountant-entry__setup { background: #352f22; border-color: #5b4c2b; }
+html[data-theme='dark'] .accountant-entry__setup strong { color: #f3d48f; }
+html[data-theme='dark'] .accountant-entry__setup span { color: #d6c9aa; }
+
+@media (max-width: 780px) {
+  .accountant-entry__layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .accountant-entry__form-panel form { grid-template-columns: 1fr; }
+  .accountant-entry__full,
+  .accountant-entry__actions { grid-column: 1; }
+}
+@media print {
+  .accountant-entry__header > a,
+  .accountant-entry__actions,
+  .accountant-entry__aside { display: none; }
+  .accountant-entry__form-panel { box-shadow: none; }
+}

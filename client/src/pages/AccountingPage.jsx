@@ -56,14 +56,20 @@ function EmptyState({ title, detail }) {
   return <div className="accounting-empty"><BookOpen size={22} aria-hidden="true" /><strong>{title}</strong><span>{detail}</span></div>
 }
 
-export function AccountingPage() {
+export function AccountingPage({ initialTab = 'Overview' }) {
   const { user } = useAuth()
   const accountant = user?.role === 'accountant'
-  const [tab, setTab] = useState('Overview')
+  const canManageChart = user?.role === 'accountant' || user?.role === 'director'
+  const visibleTabs = accountant
+    ? TABS.filter((item) => !['Journal Entries', 'Chart of Accounts', 'Audit Log'].includes(item))
+    : TABS.filter((item) => item !== 'Audit Log' || user?.role === 'director')
+  const [tab, setTab] = useState(() => visibleTabs.includes(initialTab) ? initialTab : 'Overview')
   const [years, setYears] = useState([])
   const [accounts, setAccounts] = useState([])
+  const [employees, setEmployees] = useState([])
   const [currency, setCurrency] = useState('')
   const [minorUnitDigits, setMinorUnitDigits] = useState(0)
+  const [transactionCapability, setTransactionCapability] = useState({ supported: false, topologyType: 'Checking', writeMessage: '' })
   const [entries, setEntries] = useState([])
   const [entryPage, setEntryPage] = useState(1)
   const [entryTotal, setEntryTotal] = useState(0)
@@ -92,7 +98,7 @@ export function AccountingPage() {
   const [entryError, setEntryError] = useState('')
   const [accountError, setAccountError] = useState('')
   const [yearError, setYearError] = useState('')
-  const [entryForm, setEntryForm] = useState({ reference: '', entryDate: dateToday(), description: '', sourceType: 'journal', lines: [{ accountId: '', debit: '', credit: '', description: '' }, { accountId: '', debit: '', credit: '', description: '' }] })
+  const [entryForm, setEntryForm] = useState({ reference: '', entryDate: dateToday(), description: '', sourceType: 'journal', paymentMethod: '', counterparty: '', responsibleEmployee: '', projectReference: '', supportingDocumentUrl: '', notes: '', lines: [{ accountId: '', debit: '', credit: '', description: '' }, { accountId: '', debit: '', credit: '', description: '' }] })
   const [accountForm, setAccountForm] = useState({ code: '', name: '', type: 'asset', cashOrBank: false })
   const [yearForm, setYearForm] = useState(() => {
     const today = dateToday()
@@ -118,14 +124,18 @@ export function AccountingPage() {
     setLoading(true)
     setError('')
     try {
-      const [yearResult, accountResult] = await Promise.all([
+      const [yearResult, accountResult, capabilityResult, employeeResult] = await Promise.all([
         apiRequest('/api/finance/years'),
         apiRequest('/api/finance/accounts'),
+        apiRequest('/api/finance/capabilities'),
+        apiRequest('/api/finance/employees'),
       ])
       setYears(yearResult.years || [])
       setAccounts(accountResult.accounts || [])
+      setEmployees(employeeResult.employees || [])
       setCurrency(accountResult.currency || '')
       setMinorUnitDigits(accountResult.minorUnitDigits ?? 0)
+      setTransactionCapability(capabilityResult)
       setSelectedYear((current) => current && yearResult.years?.some((year) => year.id === current)
         ? current
         : yearResult.years?.[0]?.id || '')
@@ -225,7 +235,7 @@ export function AccountingPage() {
     const totalDebit = lines.reduce((sum, line) => sum + line.debitMinor, 0)
     const totalCredit = lines.reduce((sum, line) => sum + line.creditMinor, 0)
     if (!selectedYear || !selectedYearRecord || selectedYearRecord.status !== 'open') return setEntryError('Choose an open financial year before creating a draft.')
-    if (entryForm.reference.trim().length < 1 || entryForm.reference.trim().length > 40) return setEntryError('Enter a reference of up to 40 characters.')
+    if (!/^[A-Za-z0-9_-]{2,40}$/.test(entryForm.reference.trim())) return setEntryError('Reference must be 2-40 characters and use only letters, numbers, hyphens, or underscores.')
     if (entryForm.description.trim().length < 3) return setEntryError('Add a description of at least 3 characters.')
     if (!entryForm.entryDate || entryForm.entryDate < selectedYearRecord.startDate || entryForm.entryDate > selectedYearRecord.endDate) return setEntryError('The entry date must be within the selected financial year.')
     if (lines.length < 2 || lines.some((line) => !line.accountId) || !amountsValid) return setEntryError('Choose an account and enter one non-zero integer debit or credit amount on each line.')
@@ -241,11 +251,25 @@ export function AccountingPage() {
         : '/api/finance/journal-entries', {
         method: editingEntryId ? 'PATCH' : 'POST',
         timeoutMs: 15_000,
-        body: { reference: entryForm.reference.trim(), entryDate: entryForm.entryDate, financialYearId: selectedYear, description: entryForm.description.trim(), sourceType: entryForm.sourceType, currency, lines },
+        body: {
+          reference: entryForm.reference.trim(),
+          entryDate: entryForm.entryDate,
+          financialYearId: selectedYear,
+          description: entryForm.description.trim(),
+          sourceType: entryForm.sourceType,
+          paymentMethod: entryForm.paymentMethod,
+          counterparty: entryForm.counterparty.trim(),
+          responsibleEmployee: entryForm.responsibleEmployee || null,
+          projectReference: entryForm.projectReference.trim(),
+          supportingDocumentUrl: entryForm.supportingDocumentUrl.trim(),
+          notes: entryForm.notes.trim(),
+          currency,
+          lines,
+        },
       })
       setNotice(editingEntryId ? 'Draft journal entry updated.' : 'Draft journal entry created.')
       setEditingEntryId('')
-      setEntryForm({ reference: '', entryDate: dateToday(), description: '', sourceType: 'journal', lines: [{ accountId: '', debit: '', credit: '', description: '' }, { accountId: '', debit: '', credit: '', description: '' }] })
+      setEntryForm({ reference: '', entryDate: dateToday(), description: '', sourceType: 'journal', paymentMethod: '', counterparty: '', responsibleEmployee: '', projectReference: '', supportingDocumentUrl: '', notes: '', lines: [{ accountId: '', debit: '', credit: '', description: '' }, { accountId: '', debit: '', credit: '', description: '' }] })
       setShowEntryForm(false)
       await loadEntries()
     } catch (requestError) {
@@ -268,6 +292,12 @@ export function AccountingPage() {
       entryDate: String(entry.entryDate).slice(0, 10),
       description: entry.description,
       sourceType: entry.sourceType,
+      paymentMethod: entry.paymentMethod || '',
+      counterparty: entry.counterparty || '',
+      responsibleEmployee: typeof entry.responsibleEmployee === 'string' ? entry.responsibleEmployee : entry.responsibleEmployee?._id || '',
+      projectReference: entry.projectReference || '',
+      supportingDocumentUrl: entry.supportingDocumentUrl || '',
+      notes: entry.notes || '',
       lines: entry.lines.map((line) => ({
         accountId: typeof line.account === 'string' ? line.account : line.account?._id,
         debit: line.debitMinor ? String(line.debitMinor / minorUnitFactor) : '',
@@ -286,6 +316,12 @@ export function AccountingPage() {
       entryDate: dateToday(),
       description: '',
       sourceType: 'journal',
+      paymentMethod: '',
+      counterparty: '',
+      responsibleEmployee: '',
+      projectReference: '',
+      supportingDocumentUrl: '',
+      notes: '',
       lines: [
         { accountId: '', debit: '', credit: '', description: '' },
         { accountId: '', debit: '', credit: '', description: '' },
@@ -504,8 +540,21 @@ export function AccountingPage() {
         </div>
       )}
 
+      {!loading && !transactionCapability.supported && (
+        <section className="accounting-database-warning" role="alert" aria-labelledby="accounting-database-warning-title">
+          <strong id="accounting-database-warning-title">Financial saving is currently unavailable</strong>
+          <p>{transactionCapability.writeMessage || `MongoDB is ${transactionCapability.topologyType}. Financial writes are blocked until transaction support is enabled; the app will not create partial or fabricated financial records.`}</p>
+          <ol>
+            <li>Configure the local MongoDB server to start with replica-set name <code>rs0</code>.</li>
+            <li>Restart MongoDB, then initialize it once in <code>mongosh</code> with <code>rs.initiate()</code>.</li>
+            <li>Add <code>?replicaSet=rs0</code> to <code>MONGODB_URI</code> in <code>server/.env</code>, then restart the API.</li>
+          </ol>
+          <span>Current database mode: <code>{transactionCapability.topologyType}</code>. This warning does not change any database records.</span>
+        </section>
+      )}
+
       <nav className="accounting-tabs" aria-label="Accounting sections" role="tablist">
-        {TABS.filter((item) => item !== 'Audit Log' || user?.role === 'director').map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'is-active' : ''} onClick={() => changeTab(item)}>{item}</button>)}
+        {visibleTabs.map((item) => <button key={item} type="button" role="tab" aria-selected={tab === item} className={tab === item ? 'is-active' : ''} onClick={() => changeTab(item)}>{item}</button>)}
       </nav>
 
       {loading ? <div className="accounting-loading" role="status" aria-live="polite">Loading accounting workspace…</div> : (
@@ -524,6 +573,9 @@ export function AccountingPage() {
                     <Metric icon={Scale} label="Net surplus" value={amount(overviewTotals?.netSurplusMinor, currency, minorUnitDigits)} />
                     <Metric icon={Wallet} label="Cash & bank closing" value={amount(overviewTotals?.cashAndBankClosingMinor, currency, minorUnitDigits)} />
                   </div>
+                  <p className="accounting-disclaimer">{accountant
+                    ? 'These totals update from approved transactions only. Submitted transactions affect reports after a Director reviews and posts them.'
+                    : 'These totals update from posted entries only. Saved drafts appear under Journal Entries and affect the overview and reports after a Director posts them.'}</p>
                   <div className="accounting-two-column">
                     <article className="accounting-panel">
                       <div className="accounting-panel-heading"><div><h3>{selectedYearRecord?.name || 'Financial year'}</h3><p>{asDate(selectedYearRecord?.startDate)} – {asDate(selectedYearRecord?.endDate)}</p></div><StatusPill status={selectedYearRecord?.status} /></div>
@@ -552,7 +604,7 @@ export function AccountingPage() {
                 <div><h2 id="accounting-journal-title">Journal entries</h2><p>Create balanced drafts and track their review status.</p></div>
                 <div className="accounting-toolbar">
                   <YearSelect years={years} selectedYear={selectedYear} onChange={setSelectedYear} />
-                  {accountant && <button className="accounting-btn accounting-btn--primary" type="button" onClick={() => { setShowEntryForm((current) => !current); setEntryError('') }} disabled={!selectedYearRecord || selectedYearRecord.status !== 'open'}><CirclePlus size={16} aria-hidden="true" />{showEntryForm ? 'Close form' : 'New draft'}</button>}
+                  {accountant && <button className="accounting-btn accounting-btn--primary" type="button" onClick={() => { setShowEntryForm((current) => !current); setEntryError('') }} disabled={!transactionCapability.supported || !selectedYearRecord || selectedYearRecord.status !== 'open'}><CirclePlus size={16} aria-hidden="true" />{showEntryForm ? 'Close form' : 'New draft'}</button>}
                 </div>
               </div>
               <div className="accounting-filters accounting-filters--wide">
@@ -574,15 +626,36 @@ export function AccountingPage() {
                 <div className="accounting-panel-heading"><div><h3>{editingEntryId ? 'Edit journal draft' : 'New journal draft'}</h3><p>Enter amounts in {currency || 'the configured currency'}; debits must equal credits.</p></div></div>
                 {entryError && <p className="accounting-form-error" role="alert">{entryError}</p>}
                 <div className="accounting-form-grid">
-                  <label>Reference<input value={entryForm.reference} maxLength={40} onChange={(event) => setEntryForm({ ...entryForm, reference: event.target.value })} required /></label>
+                  <label>Reference<input value={entryForm.reference} minLength={2} maxLength={40} pattern="[A-Za-z0-9_-]{2,40}" title="Use 2–40 letters, numbers, hyphens, or underscores." onChange={(event) => setEntryForm({ ...entryForm, reference: event.target.value })} required /></label>
                   <label>Entry date<input type="date" value={entryForm.entryDate} min={selectedYearRecord?.startDate} max={selectedYearRecord?.endDate} onChange={(event) => setEntryForm({ ...entryForm, entryDate: event.target.value })} required /></label>
-                  <label>Source type<select value={entryForm.sourceType} onChange={(event) => setEntryForm({ ...entryForm, sourceType: event.target.value })}>{SOURCE_TYPES.map((source) => <option key={source} value={source}>{source.replace('_', ' ')}</option>)}</select></label>
+                  <label>Source type<select value={entryForm.sourceType} onChange={(event) => setEntryForm({ ...entryForm, sourceType: event.target.value })}>{SOURCE_TYPES.map((source) => <option key={source} value={source}>{source.replace('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase())}</option>)}</select></label>
                   <label className="accounting-form-grid__wide">Description<input value={entryForm.description} maxLength={500} onChange={(event) => setEntryForm({ ...entryForm, description: event.target.value })} required /></label>
+                  <label>Payment method<select value={entryForm.paymentMethod} onChange={(event) => setEntryForm({ ...entryForm, paymentMethod: event.target.value })}><option value="">Not specified</option><option value="cash">Cash</option><option value="bank_transfer">Bank transfer</option><option value="mobile_money">Mobile money</option><option value="other">Other</option></select></label>
+                  <label>Source or recipient<input value={entryForm.counterparty} maxLength={120} onChange={(event) => setEntryForm({ ...entryForm, counterparty: event.target.value })} /></label>
+                  <label>Responsible employee<select value={entryForm.responsibleEmployee} onChange={(event) => setEntryForm({ ...entryForm, responsibleEmployee: event.target.value })}><option value="">Select employee (optional)</option>{employees.map((employee) => <option key={employee._id} value={employee._id}>{employee.name} · {employee.department}</option>)}</select></label>
+                  <label>Project or task reference<input value={entryForm.projectReference} maxLength={120} onChange={(event) => setEntryForm({ ...entryForm, projectReference: event.target.value })} /></label>
+                  <label className="accounting-form-grid__wide">Supporting document link<input type="url" value={entryForm.supportingDocumentUrl} maxLength={500} placeholder="https://…" onChange={(event) => setEntryForm({ ...entryForm, supportingDocumentUrl: event.target.value })} /></label>
+                  <label className="accounting-form-grid__wide">Notes<input value={entryForm.notes} maxLength={500} onChange={(event) => setEntryForm({ ...entryForm, notes: event.target.value })} /></label>
                 </div>
+                <aside className="accounting-entry-guidance" aria-label={`${entryForm.sourceType} entry instructions`}>
+                  <strong>{entryForm.sourceType === 'income' ? 'Income entry instructions' : entryForm.sourceType === 'expense' ? 'Expense entry instructions' : entryForm.sourceType === 'transfer' ? 'Transfer instructions' : 'Journal entry instructions'}</strong>
+                  <span>This is guidance, not an error. Saving creates a draft for review.</span>
+                  <p>
+                    {entryForm.sourceType === 'expense' && <>Debit an <strong>Expense</strong> account. Credit the <strong>Cash/bank</strong> account used to pay, or a <strong>Liability (payable)</strong> account if it is unpaid.</>}
+                    {entryForm.sourceType === 'income' && <>Debit an <strong>Asset</strong> account—use <strong>Cash/bank</strong> if received, or <strong>Accounts receivable</strong> if still owed. Credit a <strong>Revenue</strong> account.</>}
+                    {entryForm.sourceType === 'transfer' && <>Both accounts must be marked <strong>Cash or bank</strong> in the Chart of Accounts. Debit the account receiving the money and credit the account it comes from.</>}
+                    {['journal', 'adjustment'].includes(entryForm.sourceType) && <>Choose accounts that match the transaction. Enter each amount as a Debit or Credit; the totals must match.</>}
+                  </p>
+                </aside>
                 <div className="accounting-lines-heading"><strong>Entry lines</strong><span>Debit total {amount(debitTotal, currency, minorUnitDigits)} · Credit total {amount(creditTotal, currency, minorUnitDigits)}</span></div>
                 <div className="accounting-lines">
                   {entryForm.lines.map((line, index) => <div className="accounting-line" key={index}>
-                    <label>Account<select value={line.accountId} onChange={(event) => setLine(index, 'accountId', event.target.value)} required><option value="">Select account</option>{activeAccounts.map((account) => <option key={account._id} value={account._id}>{account.code} · {account.name}</option>)}</select></label>
+                    <label>Account<select value={line.accountId} onChange={(event) => setLine(index, 'accountId', event.target.value)} required><option value="">Select account</option>{activeAccounts.map((account) => {
+                      const type = String(account.type || 'other')
+                      const accountType = type.charAt(0).toUpperCase() + type.slice(1)
+                      const accountDetails = account.cashOrBank ? `${accountType} · Cash/bank` : accountType
+                      return <option key={account._id} value={account._id}>{account.code} · {account.name} · {accountDetails}</option>
+                    })}</select></label>
                     <label>Debit<input type="number" min="0" step={1 / minorUnitFactor} inputMode="decimal" value={line.debit} onChange={(event) => { setLine(index, 'debit', event.target.value); if (event.target.value) setLine(index, 'credit', '') }} /></label>
                     <label>Credit<input type="number" min="0" step={1 / minorUnitFactor} inputMode="decimal" value={line.credit} onChange={(event) => { setLine(index, 'credit', event.target.value); if (event.target.value) setLine(index, 'debit', '') }} /></label>
                     <label>Line description<input value={line.description} maxLength={300} onChange={(event) => setLine(index, 'description', event.target.value)} /></label>
@@ -592,7 +665,7 @@ export function AccountingPage() {
               </form>}
               {entriesLoading ? <div className="accounting-loading" role="status">Loading journal entries…</div> : filteredEntries.length === 0 ? <EmptyState title="No journal entries" detail={statusFilter === 'all' ? 'No entries exist for this financial year yet.' : `No ${statusFilter} entries for this financial year.`} /> : (
                 <div className="accounting-table-wrap"><table className="accounting-table">
-                  <thead><tr><th scope="col">Reference & description</th><th scope="col">Date</th><th scope="col">Source</th><th scope="col">Status</th><th scope="col">Amount</th><th scope="col">Action</th></tr></thead>
+                  <thead><tr><th scope="col">Reference & description</th><th scope="col">Date</th><th scope="col">Account category</th><th scope="col">Source / recipient</th><th scope="col">Method</th><th scope="col">Status</th><th scope="col">Amount</th><th scope="col">Action</th></tr></thead>
                   <tbody>{filteredEntries.map((entry) => {
                     const debit = (entry.lines || []).reduce((sum, line) => sum + Number(line.debitMinor || 0), 0)
                     const creatorId = typeof entry.createdBy === 'string' ? entry.createdBy : entry.createdBy?._id
@@ -600,7 +673,10 @@ export function AccountingPage() {
                     const canReview = user?.role === 'director' && entry.status === 'submitted'
                     return <tr key={entry._id}>
                       <td><strong>{entry.reference}</strong><span>{entry.description}</span>{entry.reviewComment && <span className="accounting-review-comment">Returned: {entry.reviewComment}</span>}</td>
-                      <td>{asDate(entry.entryDate)}</td><td className="accounting-capitalize">{String(entry.sourceType || '').replace('_', ' ')}</td>
+                      <td>{asDate(entry.entryDate)}</td>
+                      <td>{[...new Set((entry.lines || []).map((line) => line.account?.name).filter(Boolean))].join(', ') || '—'}</td>
+                      <td>{entry.counterparty || '—'}{entry.projectReference && <span>{entry.projectReference}</span>}</td>
+                      <td className="accounting-capitalize">{String(entry.paymentMethod || '—').replaceAll('_', ' ')}</td>
                       <td><StatusPill status={entry.status} /></td><td>{amount(debit, entry.currency || currency, minorUnitDigits)}</td>
                       <td>
                         {ownDraft && <div className="accounting-row-actions">
@@ -632,29 +708,29 @@ export function AccountingPage() {
           {tab === 'Chart of Accounts' && (
             <section className="accounting-section" aria-labelledby="accounting-accounts-title">
               <div className="accounting-section-heading"><div><h2 id="accounting-accounts-title">Chart of accounts</h2><p>Accounts used to classify journal activity.</p></div>
-                {accountant && <div className="accounting-toolbar"><button type="button" className="accounting-btn accounting-btn--secondary" onClick={seedChart} disabled={saving}><RefreshCw size={15} aria-hidden="true" />{saving ? 'Working…' : 'Seed standard chart'}</button><button type="button" className="accounting-btn accounting-btn--primary" onClick={() => { setShowAccountForm((current) => !current); setAccountError('') }}><CirclePlus size={16} aria-hidden="true" />{showAccountForm ? 'Close form' : 'Add account'}</button></div>}
+                {canManageChart && <div className="accounting-toolbar"><button type="button" className="accounting-btn accounting-btn--secondary" onClick={seedChart} disabled={saving || !transactionCapability.supported}><RefreshCw size={15} aria-hidden="true" />{saving ? 'Working…' : 'Seed standard chart'}</button><button type="button" className="accounting-btn accounting-btn--primary" onClick={() => { setShowAccountForm((current) => !current); setAccountError('') }} disabled={!transactionCapability.supported}><CirclePlus size={16} aria-hidden="true" />{showAccountForm ? 'Close form' : 'Add account'}</button></div>}
               </div>
-              {showAccountForm && accountant && <form className="accounting-panel accounting-form" onSubmit={createAccount}>
+              {showAccountForm && canManageChart && <form className="accounting-panel accounting-form" onSubmit={createAccount}>
                 <h3>Add account</h3>{accountError && <p className="accounting-form-error" role="alert">{accountError}</p>}
                 <div className="accounting-form-grid"><label>Account code<input value={accountForm.code} maxLength={20} onChange={(event) => setAccountForm({ ...accountForm, code: event.target.value })} required /></label><label>Account name<input value={accountForm.name} maxLength={120} onChange={(event) => setAccountForm({ ...accountForm, name: event.target.value })} required /></label><label>Type<select value={accountForm.type} onChange={(event) => setAccountForm({ ...accountForm, type: event.target.value, cashOrBank: event.target.value === 'asset' ? accountForm.cashOrBank : false })}><option value="asset">Asset</option><option value="liability">Liability</option><option value="equity">Equity</option><option value="revenue">Revenue</option><option value="expense">Expense</option></select></label><label className="accounting-checkbox"><input type="checkbox" checked={accountForm.cashOrBank} disabled={accountForm.type !== 'asset'} onChange={(event) => setAccountForm({ ...accountForm, cashOrBank: event.target.checked })} />Cash or bank</label></div>
                 <div className="accounting-form-actions"><button className="accounting-btn accounting-btn--primary" disabled={saving}>{saving ? 'Saving…' : 'Add account'}</button></div>
               </form>}
-              {accounts.length === 0 ? <EmptyState title="No accounts yet" detail={accountant ? 'Seed the standard chart to add common accounts, or add an account yourself.' : 'An accountant has not added any accounts yet.'} /> : <div className="accounting-table-wrap"><table className="accounting-table"><thead><tr><th scope="col">Code</th><th scope="col">Account</th><th scope="col">Type</th><th scope="col">Cash or bank</th><th scope="col">Status</th></tr></thead><tbody>{accounts.map((account) => <tr key={account._id}><td><strong>{account.code}</strong></td><td>{account.name}</td><td className="accounting-capitalize">{account.type}</td><td>{account.cashOrBank ? 'Yes' : 'No'}</td><td><StatusPill status={account.active === false ? 'inactive' : 'active'} /></td></tr>)}</tbody></table></div>}
+              {accounts.length === 0 ? <EmptyState title="No accounts yet" detail={canManageChart ? 'Seed the standard chart to add common accounts, or add an account yourself.' : 'A Director has not initialized the accounting chart yet.'} /> : <div className="accounting-table-wrap"><table className="accounting-table"><thead><tr><th scope="col">Code</th><th scope="col">Account</th><th scope="col">Type</th><th scope="col">Cash or bank</th><th scope="col">Status</th></tr></thead><tbody>{accounts.map((account) => <tr key={account._id}><td><strong>{account.code}</strong></td><td>{account.name}</td><td className="accounting-capitalize">{account.type}</td><td>{account.cashOrBank ? 'Yes' : 'No'}</td><td><StatusPill status={account.active === false ? 'inactive' : 'active'} /></td></tr>)}</tbody></table></div>}
             </section>
           )}
 
           {tab === 'Financial Years' && (
             <section className="accounting-section" aria-labelledby="accounting-years-title">
-              <div className="accounting-section-heading"><div><h2 id="accounting-years-title">Financial years</h2><p>Calendar-year periods help keep entries and reports organized.</p></div>{accountant && <button type="button" className="accounting-btn accounting-btn--primary" onClick={() => { setShowYearForm((current) => !current); setYearError('') }}><CirclePlus size={16} aria-hidden="true" />{showYearForm ? 'Close form' : 'New financial year'}</button>}</div>
+              <div className="accounting-section-heading"><div><h2 id="accounting-years-title">Financial years</h2><p>Calendar-year periods help keep entries and reports organized.</p></div>{accountant && <button type="button" className="accounting-btn accounting-btn--primary" onClick={() => { setShowYearForm((current) => !current); setYearError('') }} disabled={!transactionCapability.supported}><CirclePlus size={16} aria-hidden="true" />{showYearForm ? 'Close form' : 'New financial year'}</button>}</div>
               {showYearForm && accountant && <form className="accounting-panel accounting-form" onSubmit={createYear}><h3>Create financial year</h3><p className="accounting-form-hint">Guidance: financial years run January 1–December 31. Saved dates are shown below.</p>{yearError && <p className="accounting-form-error" role="alert">{yearError}</p>}<div className="accounting-form-grid"><label>Name<input value={yearForm.name} maxLength={40} onChange={(event) => setYearForm({ ...yearForm, name: event.target.value })} required /></label><label>Start date<input type="date" value={yearForm.startDate} onChange={(event) => setYearForm({ ...yearForm, startDate: event.target.value })} required /></label><label>End date<input type="date" value={yearForm.endDate} onChange={(event) => setYearForm({ ...yearForm, endDate: event.target.value })} required /></label></div><div className="accounting-form-actions"><button className="accounting-btn accounting-btn--primary" disabled={saving}>{saving ? 'Creating…' : 'Create year'}</button></div></form>}
-              {years.length === 0 ? <EmptyState title="No financial years" detail="Create a January–December financial year to start a ledger period." /> : <div className="accounting-year-list">{years.map((year) => <article className="accounting-year-card" key={year.id}><div className="accounting-year-icon"><CalendarDays size={19} aria-hidden="true" /></div><div className="accounting-year-details"><strong>{year.name}</strong><span>{asDate(year.startDate)} – {asDate(year.endDate)}</span><small>{year.closedAt ? `Closed ${asDate(year.closedAt)}` : 'Calendar reporting period'}</small></div><StatusPill status={year.status} />{!accountant && <div className="accounting-year-actions">{year.status === 'open' ? <button className="accounting-btn accounting-btn--small" type="button" disabled={busyId === year.id} onClick={() => changeFinancialYearStatus(year, 'close')}>{busyId === year.id ? 'Closing…' : 'Close year'}</button> : <button className="accounting-btn accounting-btn--secondary" type="button" disabled={busyId === year.id} onClick={() => changeFinancialYearStatus(year, 'reopen')}>{busyId === year.id ? 'Reopening…' : 'Reopen'}</button>}</div>}</article>)}</div>}
+              {years.length === 0 ? <EmptyState title="No financial years" detail="Create a January–December financial year to start a ledger period." /> : <div className="accounting-year-list">{years.map((year) => <article className="accounting-year-card" key={year.id}><div className="accounting-year-icon"><CalendarDays size={19} aria-hidden="true" /></div><div className="accounting-year-details"><strong>{year.name}</strong><span>{asDate(year.startDate)} – {asDate(year.endDate)}</span><small>{year.closedAt ? `Closed ${asDate(year.closedAt)}` : 'Calendar reporting period'}</small></div><StatusPill status={year.status} />{!accountant && <div className="accounting-year-actions">{year.status === 'open' ? <button className="accounting-btn accounting-btn--small" type="button" disabled={!transactionCapability.supported || busyId === year.id} onClick={() => changeFinancialYearStatus(year, 'close')}>{busyId === year.id ? 'Closing…' : 'Close year'}</button> : <button className="accounting-btn accounting-btn--secondary" type="button" disabled={!transactionCapability.supported || busyId === year.id} onClick={() => changeFinancialYearStatus(year, 'reopen')}>{busyId === year.id ? 'Reopening…' : 'Reopen'}</button>}</div>}</article>)}</div>}
             </section>
           )}
 
           {tab === 'Reports' && (
             <section className="accounting-section" aria-labelledby="accounting-reports-title">
               <div className="accounting-section-heading"><div><h2 id="accounting-reports-title">Reports</h2><p>Accrual-basis ledger summary using posted records only.</p></div><div className="accounting-toolbar"><YearSelect years={years} selectedYear={selectedYear} onChange={setSelectedYear} /><label className="accounting-month-select"><span className="sr-only">Report period</span><select value={reportMonth} onChange={(event) => setReportMonth(event.target.value)}><option value="">Full year</option>{MONTHS.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}</select></label></div></div>
-              <p className="accounting-disclaimer">This is an accrual-basis ledger summary, not a complete statutory financial statement.</p>
+              <p className="accounting-disclaimer">This is an accrual-basis ledger summary, not a complete statutory financial statement. It includes posted entries only; saved drafts and entries awaiting review are excluded until they are posted.</p>
               {reportLoading ? <div className="accounting-loading" role="status">Loading report…</div> : !report ? <EmptyState title="No report available" detail={years.length ? 'Report data could not be loaded for the selected period.' : 'Create a financial year before viewing a report.'} /> : (
                 <>
                   <div className="accounting-report-meta">

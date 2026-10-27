@@ -79,6 +79,12 @@
 .accounting-alert, .accounting-notice { align-items: center; border: 1px solid; border-radius: 8px; display: flex; gap: 12px; justify-content: space-between; padding: 11px 14px; }
 .accounting-alert { background: #fff5f4; border-color: #f0c8c4; color: #873b35; }
 .accounting-notice { background: #effaf4; border-color: #bee6cd; color: #17603a; }
+.accounting-database-warning { background: #fff5e6; border: 1px solid #edc98e; border-left: 4px solid #c77b14; border-radius: 9px; color: #60451f; display: grid; gap: 8px; line-height: 1.5; padding: 16px 18px; }
+.accounting-database-warning > strong { color: #744a0c; font-size: 1rem; }
+.accounting-database-warning p { margin: 0; }
+.accounting-database-warning ol { margin: 0; padding-left: 23px; }
+.accounting-database-warning code { background: rgb(255 255 255 / 70%); border: 1px solid #ead9bc; border-radius: 4px; font-size: .9em; padding: 1px 4px; }
+.accounting-database-warning > span { color: #765a32; font-size: .82rem; }
 .accounting-loading { background: #f8fafc; border: 1px solid var(--accounting-border); border-radius: 9px; color: var(--accounting-muted); padding: 26px; text-align: center; }
 
 .accounting-metrics { display: grid; gap: 14px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -135,6 +141,10 @@
 .accounting-form h3 { margin: 0; }
 .accounting-form-hint, .accounting-disclaimer, .accounting-muted { color: var(--accounting-muted); font-size: .84rem; line-height: 1.5; margin: -8px 0 0; }
 .accounting-disclaimer { background: #f7f9fc; border-left: 3px solid #8ba7c9; border-radius: 2px 7px 7px 2px; margin: 0; padding: 10px 12px; }
+.accounting-entry-guidance { background: #eff6ff; border: 1px solid #d8e7fb; border-left: 3px solid var(--accounting-blue); border-radius: 7px; color: #385371; display: grid; font-size: .86rem; gap: 3px; line-height: 1.55; margin: 0; padding: 10px 12px; }
+.accounting-entry-guidance > strong { color: #294c79; font-size: .88rem; }
+.accounting-entry-guidance > span { color: #627d9f; font-size: .78rem; }
+.accounting-entry-guidance p { margin: 3px 0 0; }
 .accounting-form-grid { display: grid; gap: 13px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .accounting-form-grid label, .accounting-line label { color: #51657c; display: grid; font-size: .79rem; font-weight: 650; gap: 6px; min-width: 0; }
 .accounting-form-grid__wide { grid-column: 1 / -1; }
@@ -235,6 +245,7 @@ html[data-theme='dark'] .accounting-table-wrap { background: #202c3a; }
 html[data-theme='dark'] .accounting-table th,
 html[data-theme='dark'] .accounting-loading,
 html[data-theme='dark'] .accounting-disclaimer,
+html[data-theme='dark'] .accounting-entry-guidance,
 html[data-theme='dark'] .accounting-empty,
 html[data-theme='dark'] .accounting-line,
 html[data-theme='dark'] .accounting-form input,
@@ -244,6 +255,9 @@ html[data-theme='dark'] .accounting-filters--wide select,
 html[data-theme='dark'] .accounting-year-select select,
 html[data-theme='dark'] .accounting-month-select select,
 html[data-theme='dark'] .accounting-filters select { background: #182331; border-color: #435269; color: #e3e9f2; }
+html[data-theme='dark'] .accounting-entry-guidance { background: #263b54; border-color: #435269; border-left-color: #79a9ed; color: #d2e2f7; }
+html[data-theme='dark'] .accounting-entry-guidance > strong { color: #e3e9f2; }
+html[data-theme='dark'] .accounting-entry-guidance > span { color: #afc2dc; }
 html[data-theme='dark'] .accounting-table td,
 html[data-theme='dark'] .accounting-summary-list > div,
 html[data-theme='dark'] .accounting-trend > div,
@@ -259,6 +273,10 @@ html[data-theme='dark'] .accounting-basis,
 html[data-theme='dark'] .accounting-muted { color: #a3afc0; }
 html[data-theme='dark'] .accounting-report-meta span { background: #26364a; }
 html[data-theme='dark'] .accounting-btn--secondary { background: #26364a; border-color: #485c76; color: #d2e2f7; }
+html[data-theme='dark'] .accounting-database-warning { background: #3b3020; border-color: #73552b; color: #e3d4b8; }
+html[data-theme='dark'] .accounting-database-warning > strong { color: #ffd48a; }
+html[data-theme='dark'] .accounting-database-warning code { background: #2a241b; border-color: #73552b; color: #ffe0a8; }
+html[data-theme='dark'] .accounting-database-warning > span { color: #c9b792; }
 
 @media (prefers-reduced-motion: reduce) {
   .accounting-btn { transition: none; }

@@ -5,6 +5,7 @@ const FinancialAuditLog = require('../models/FinancialAuditLog');
 const FinancialYearGuard = require('../models/FinancialYearGuard');
 const FinancialYear = require('../models/FinancialYear');
 const JournalEntry = require('../models/JournalEntry');
+const User = require('../models/User');
 const { requireAuth, requireRoles } = require('../middleware/auth');
 const {
   ACCOUNT_TYPES,
@@ -12,7 +13,9 @@ const {
   accountBalanceMinor,
   safeAdd,
   safeSubtract,
+  validateJournalDetails,
   summarizePostedEntries,
+  validateJournalMetadata,
   validateJournalComposition,
   validateJournalLines,
   yearDates,
@@ -39,6 +42,24 @@ const STANDARD_ACCOUNTS = [
 router.use(requireAuth);
 router.use(requireRoles(...FINANCE_ROLES));
 
+function transactionCapability() {
+  const topologyType = mongoose.connection.client?.topology?.description?.type || 'Disconnected';
+  return {
+    topologyType,
+    supported: ['ReplicaSetWithPrimary', 'Sharded', 'LoadBalanced'].includes(topologyType),
+  };
+}
+
+function requireTransactionSupport(req, res, next) {
+  const capability = transactionCapability();
+  if (capability.supported) return next();
+  return res.status(503).json({
+    message: `Financial records cannot be saved because MongoDB is ${capability.topologyType}. Start MongoDB as a transaction-capable replica set or sharded cluster, then restart the API.`,
+    code: 'MONGODB_TRANSACTIONS_REQUIRED',
+    topologyType: capability.topologyType,
+  });
+}
+
 async function withTransaction(work) {
   const session = await mongoose.startSession();
   try {
@@ -53,10 +74,6 @@ function isDateOnly(value) {
     && /^\d{4}-\d{2}-\d{2}$/.test(value)
     && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))
     && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
-}
-
-function validCurrency(value, baseCurrency) {
-  return value === baseCurrency;
 }
 
 function escapeRegex(value) {
@@ -92,7 +109,17 @@ router.get('/years', async (req, res) => {
   return res.json({ years: years.map(serializeYear) });
 });
 
-router.post('/years', requireRoles('accountant'), async (req, res) => {
+router.get('/capabilities', (req, res) => {
+  const capability = transactionCapability();
+  return res.json({
+    ...capability,
+    writeMessage: capability.supported
+      ? ''
+      : `This database is ${capability.topologyType}; financial writes require MongoDB configured as a replica set or sharded cluster. See README.md for local setup steps.`,
+  });
+});
+
+router.post('/years', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   const { name, startDate, endDate } = req.body || {};
   if (typeof name !== 'string' || !name.trim() || name.trim().length > 40
     || !isDateOnly(startDate) || !isDateOnly(endDate)
@@ -129,7 +156,7 @@ router.post('/years', requireRoles('accountant'), async (req, res) => {
   return res.status(201).json({ year: serializeYear(year) });
 });
 
-router.post('/years/:id/close', requireRoles('director'), async (req, res) => {
+router.post('/years/:id/close', requireRoles('director'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Financial year identifier is invalid.' });
   let errorStatus = 0;
   let errorMessage = '';
@@ -165,7 +192,7 @@ router.post('/years/:id/close', requireRoles('director'), async (req, res) => {
   return res.json({ year: serializeYear(year) });
 });
 
-router.post('/years/:id/reopen', requireRoles('director'), async (req, res) => {
+router.post('/years/:id/reopen', requireRoles('director'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Financial year identifier is invalid.' });
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
   if (reason.length < 10 || reason.length > 500) {
@@ -211,7 +238,15 @@ router.get('/accounts', async (req, res) => {
   });
 });
 
-router.post('/accounts/standard-chart', requireRoles('accountant'), async (req, res) => {
+router.get('/employees', async (req, res) => {
+  const employees = await User.find({
+    active: true,
+    role: { $nin: ['pending', 'parent', 'member'] },
+  }).select('_id name email department role').sort({ name: 1 }).lean();
+  return res.json({ employees });
+});
+
+router.post('/accounts/standard-chart', requireRoles('accountant', 'director'), requireTransactionSupport, async (req, res) => {
   const currency = req.app.locals.accountingCurrency;
   const accounts = await withTransaction(async (session) => {
     const createdAccounts = [];
@@ -232,7 +267,7 @@ router.post('/accounts/standard-chart', requireRoles('accountant'), async (req, 
   return res.status(201).json({ currency, accounts });
 });
 
-router.post('/accounts', requireRoles('accountant'), async (req, res) => {
+router.post('/accounts', requireRoles('accountant', 'director'), requireTransactionSupport, async (req, res) => {
   const { code, name, type, cashOrBank = false } = req.body || {};
   if (typeof code !== 'string' || !/^[A-Za-z0-9_-]{2,20}$/.test(code.trim())
     || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 120
@@ -257,6 +292,177 @@ router.post('/accounts', requireRoles('accountant'), async (req, res) => {
   return res.status(201).json({ account });
 });
 
+router.post('/daily-transactions', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
+  const {
+    reference, entryDate, financialYearId, description, sourceType, currency, amountMinor,
+    paymentMethod = '', counterparty = '', categoryAccountId = null,
+    supportingDocumentUrl = '', notes = '',
+  } = req.body || {};
+  const metadataError = validateJournalMetadata({
+    reference, entryDate, description, sourceType, currency,
+  }, req.app.locals.accountingCurrency);
+  if (metadataError) return res.status(400).json({ message: metadataError });
+  if (!['income', 'expense'].includes(sourceType)) {
+    return res.status(400).json({ message: 'Daily transactions must be income or expense.' });
+  }
+  if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
+    return res.status(400).json({ message: 'Enter an amount greater than zero using whole currency minor units.' });
+  }
+  if (!mongoose.isValidObjectId(financialYearId)) {
+    return res.status(400).json({ message: 'Select a valid financial year.' });
+  }
+  if (categoryAccountId && !mongoose.isValidObjectId(categoryAccountId)) {
+    return res.status(400).json({ message: 'Choose a valid transaction category.' });
+  }
+  const detailsError = validateJournalDetails({ paymentMethod, counterparty, supportingDocumentUrl, notes });
+  if (detailsError) return res.status(400).json({ message: detailsError });
+  const date = new Date(`${entryDate}T00:00:00.000Z`);
+  const referenceValue = reference.trim().toUpperCase();
+  let errorStatus = 0;
+  let errorMessage = '';
+  let duplicate = false;
+
+  const entry = await withTransaction(async (session) => {
+    const existing = await JournalEntry.findOne({ reference: referenceValue }).session(session);
+    if (existing) {
+      const samePayload = String(existing.createdBy) === String(req.user._id)
+        && existing.sourceType === sourceType
+        && existing.entryDate.getTime() === date.getTime()
+        && existing.description === description.trim()
+        && existing.counterparty === counterparty.trim()
+        && existing.paymentMethod === paymentMethod
+        && existing.currency === currency
+        && existing.supportingDocumentUrl === supportingDocumentUrl.trim()
+        && existing.notes === notes.trim()
+        && existing.lines.length === 2
+        && existing.lines.every((line) => line.debitMinor === amountMinor || line.creditMinor === amountMinor)
+        && (!categoryAccountId || existing.lines.some((line) => String(line.account) === String(categoryAccountId)));
+      if (samePayload) {
+        if (existing.status === 'submitted') {
+          const year = await FinancialYear.findById(existing.financialYear).session(session);
+          if (!year || year.status !== 'open') {
+            errorStatus = 409;
+            errorMessage = 'This transaction is awaiting review, but its financial year is no longer open.';
+            return null;
+          }
+          existing.status = 'posted';
+          existing.postedAt = new Date();
+          await existing.save({ session });
+          await touchFinancialYear(year, session);
+          await audit(req.user, 'journal_entry.daily_transaction_posted', 'journal_entry', existing._id, {
+            reference: existing.reference,
+            sourceType: existing.sourceType,
+            amountMinor,
+            postedAt: existing.postedAt,
+            promotedFromSubmitted: true,
+          }, '', session);
+          duplicate = true;
+          return existing;
+        }
+        if (existing.status !== 'posted') {
+          errorStatus = 409;
+          errorMessage = 'A matching draft already exists. Open transaction history and submit or correct that draft before retrying.';
+          return null;
+        }
+        duplicate = true;
+        return existing;
+      }
+      errorStatus = 409;
+      errorMessage = 'This reference has already been used. Use a new reference for a different transaction.';
+      return null;
+    }
+
+    const year = await FinancialYear.findById(financialYearId).session(session);
+    if (!year) {
+      errorStatus = 400;
+      errorMessage = 'Select an existing financial year.';
+      return null;
+    }
+    if (year.status !== 'open') {
+      errorStatus = 409;
+      errorMessage = 'Transactions can only be recorded in an open financial year.';
+      return null;
+    }
+    if (date < year.startDate || date > year.endDate) {
+      errorStatus = 400;
+      errorMessage = 'The transaction date must fall within the selected financial year.';
+      return null;
+    }
+
+    const categoryType = sourceType === 'income' ? 'revenue' : 'expense';
+    const accounts = await FinancialAccount.find({ active: true, currency }).sort({ code: 1 }).session(session);
+    const cashAccount = accounts.find((account) => account.cashOrBank);
+    const categoryAccount = categoryAccountId
+      ? accounts.find((account) => String(account._id) === String(categoryAccountId) && account.type === categoryType)
+      : accounts.find((account) => account.type === categoryType);
+    if (!cashAccount || !categoryAccount) {
+      errorStatus = 409;
+      errorMessage = 'The finance chart is not ready for this transaction type. Ask a Director to initialize the standard chart.';
+      return null;
+    }
+
+    const lines = sourceType === 'income'
+      ? [
+          { accountId: cashAccount._id, debitMinor: amountMinor, creditMinor: 0 },
+          { accountId: categoryAccount._id, debitMinor: 0, creditMinor: amountMinor },
+        ]
+      : [
+          { accountId: categoryAccount._id, debitMinor: amountMinor, creditMinor: 0 },
+          { accountId: cashAccount._id, debitMinor: 0, creditMinor: amountMinor },
+        ];
+    const linesError = validateJournalLines(lines);
+    if (linesError) {
+      errorStatus = 400;
+      errorMessage = linesError;
+      return null;
+    }
+    const compositionError = validateJournalComposition(sourceType, lines, accounts);
+    if (compositionError) {
+      errorStatus = 400;
+      errorMessage = compositionError;
+      return null;
+    }
+
+    await touchFinancialYear(year, session);
+    const postedAt = new Date();
+    const [created] = await JournalEntry.create([{
+      reference: referenceValue,
+      entryDate: date,
+      financialYear: year._id,
+      periodId: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+      description: description.trim(),
+      sourceType,
+      paymentMethod,
+      counterparty: counterparty.trim(),
+      supportingDocumentUrl: supportingDocumentUrl.trim(),
+      notes: notes.trim(),
+      currency,
+      lines: lines.map((line, index) => ({
+        account: line.accountId,
+        debitMinor: line.debitMinor,
+        creditMinor: line.creditMinor,
+        description: index === 0 && sourceType === 'income'
+          ? 'Cash or bank received'
+          : index === 1 && sourceType === 'expense'
+            ? 'Cash or bank payment'
+            : description.trim(),
+      })),
+      createdBy: req.user._id,
+      status: 'posted',
+      postedAt,
+    }], { session });
+    await audit(req.user, 'journal_entry.daily_transaction_posted', 'journal_entry', created._id, {
+      reference: created.reference,
+      sourceType: created.sourceType,
+      amountMinor,
+      postedAt,
+    }, '', session);
+    return created;
+  });
+  if (errorStatus) return res.status(errorStatus).json({ message: errorMessage });
+  return res.status(duplicate ? 200 : 201).json({ entry, duplicate });
+});
+
 router.get('/journal-entries', async (req, res) => {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 25));
@@ -272,6 +478,9 @@ router.get('/journal-entries', async (req, res) => {
   if (req.query.sourceType) {
     if (!SOURCE_TYPES.has(req.query.sourceType)) return res.status(400).json({ message: 'Journal source type filter is invalid.' });
     filter.sourceType = req.query.sourceType;
+  }
+  if (req.query.paymentMethod) {
+    filter.paymentMethod = req.query.paymentMethod;
   }
   const dateRange = {};
   if (req.query.from) {
@@ -289,13 +498,14 @@ router.get('/journal-entries', async (req, res) => {
   if (typeof req.query.search === 'string' && req.query.search.trim()) {
     const term = escapeRegex(req.query.search.trim().slice(0, 100));
     const expression = new RegExp(term, 'i');
-    filter.$or = [{ reference: expression }, { description: expression }];
+    filter.$or = [{ reference: expression }, { description: expression }, { counterparty: expression }];
   }
   const [entries, total] = await Promise.all([
     JournalEntry.find(filter)
       .populate('lines.account', 'code name type cashOrBank')
       .populate('createdBy', 'name email role')
       .populate('approvedBy', 'name email role')
+      .populate('responsibleEmployee', 'name email department role')
       .sort({ entryDate: -1, createdAt: -1 })
       .skip((page - 1) * limit).limit(limit).lean(),
     JournalEntry.countDocuments(filter),
@@ -303,15 +513,23 @@ router.get('/journal-entries', async (req, res) => {
   return res.json({ entries, page, limit, total });
 });
 
-router.post('/journal-entries', requireRoles('accountant'), async (req, res) => {
+router.post('/journal-entries', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   const {
     reference, entryDate, financialYearId, description, sourceType = 'journal', currency, lines,
+    paymentMethod = '', counterparty = '', responsibleEmployee = null, projectReference = '',
+    supportingDocumentUrl = '', notes = '',
   } = req.body || {};
-  if (typeof reference !== 'string' || !/^[A-Za-z0-9_-]{2,40}$/.test(reference.trim())
-    || !isDateOnly(entryDate) || !mongoose.isValidObjectId(financialYearId)
-    || typeof description !== 'string' || description.trim().length < 3 || description.trim().length > 500
-    || !SOURCE_TYPES.has(sourceType) || !validCurrency(currency, req.app.locals.accountingCurrency)) {
-    return res.status(400).json({ message: `Provide a valid reference, date, description, source type, and configured base currency (${req.app.locals.accountingCurrency}).` });
+  const metadataError = validateJournalMetadata({
+    reference, entryDate, description, sourceType, currency,
+  }, req.app.locals.accountingCurrency);
+  if (metadataError) return res.status(400).json({ message: metadataError });
+  if (!mongoose.isValidObjectId(financialYearId)) {
+    return res.status(400).json({ message: 'Select a valid financial year.' });
+  }
+  const detailsError = validateJournalDetails({ paymentMethod, counterparty, projectReference, supportingDocumentUrl, notes });
+  if (detailsError) return res.status(400).json({ message: detailsError });
+  if (responsibleEmployee && !mongoose.isValidObjectId(responsibleEmployee)) {
+    return res.status(400).json({ message: 'Select a valid responsible employee.' });
   }
   const linesError = validateJournalLines(lines);
   if (linesError) return res.status(400).json({ message: linesError });
@@ -351,10 +569,13 @@ router.post('/journal-entries', requireRoles('accountant'), async (req, res) => 
       errorMessage = 'All journal lines must reference active accounts in the configured base currency.';
       return null;
     }
-    const compositionError = validateJournalComposition(sourceType, lines, accounts);
-    if (compositionError) {
+    if (responsibleEmployee && !(await User.exists({
+      _id: responsibleEmployee,
+      active: true,
+      role: { $nin: ['pending', 'parent', 'member'] },
+    }).session(session))) {
       errorStatus = 400;
-      errorMessage = compositionError;
+      errorMessage = 'Select an active organization employee.';
       return null;
     }
     await touchFinancialYear(year, session);
@@ -365,6 +586,12 @@ router.post('/journal-entries', requireRoles('accountant'), async (req, res) => 
       periodId: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
       description: description.trim(),
       sourceType,
+      paymentMethod,
+      counterparty: counterparty.trim(),
+      responsibleEmployee: responsibleEmployee || null,
+      projectReference: projectReference.trim(),
+      supportingDocumentUrl: supportingDocumentUrl.trim(),
+      notes: notes.trim(),
       currency,
       lines: lines.map((line) => ({
         account: line.accountId,
@@ -375,7 +602,14 @@ router.post('/journal-entries', requireRoles('accountant'), async (req, res) => 
       createdBy: req.user._id,
     }], { session });
     await audit(req.user, 'journal_entry.created', 'journal_entry', created._id, {
-      reference: created.reference, status: created.status, lineCount: created.lines.length,
+      reference: created.reference,
+      status: created.status,
+      sourceType: created.sourceType,
+      paymentMethod: created.paymentMethod,
+      counterparty: created.counterparty,
+      responsibleEmployee: created.responsibleEmployee,
+      projectReference: created.projectReference,
+      lineCount: created.lines.length,
     }, '', session);
     return created;
   });
@@ -383,16 +617,24 @@ router.post('/journal-entries', requireRoles('accountant'), async (req, res) => 
   return res.status(201).json({ entry });
 });
 
-router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res) => {
+router.patch('/journal-entries/:id', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   const {
     reference, entryDate, financialYearId, description, sourceType = 'journal', currency, lines,
+    paymentMethod = '', counterparty = '', responsibleEmployee = null, projectReference = '',
+    supportingDocumentUrl = '', notes = '',
   } = req.body || {};
-  if (typeof reference !== 'string' || !/^[A-Za-z0-9_-]{2,40}$/.test(reference.trim())
-    || !isDateOnly(entryDate) || !mongoose.isValidObjectId(financialYearId)
-    || typeof description !== 'string' || description.trim().length < 3 || description.trim().length > 500
-    || !SOURCE_TYPES.has(sourceType) || !validCurrency(currency, req.app.locals.accountingCurrency)) {
-    return res.status(400).json({ message: `Provide a valid reference, date, description, source type, and configured base currency (${req.app.locals.accountingCurrency}).` });
+  const metadataError = validateJournalMetadata({
+    reference, entryDate, description, sourceType, currency,
+  }, req.app.locals.accountingCurrency);
+  if (metadataError) return res.status(400).json({ message: metadataError });
+  if (!mongoose.isValidObjectId(financialYearId)) {
+    return res.status(400).json({ message: 'Select a valid financial year.' });
+  }
+  const detailsError = validateJournalDetails({ paymentMethod, counterparty, projectReference, supportingDocumentUrl, notes });
+  if (detailsError) return res.status(400).json({ message: detailsError });
+  if (responsibleEmployee && !mongoose.isValidObjectId(responsibleEmployee)) {
+    return res.status(400).json({ message: 'Select a valid responsible employee.' });
   }
   const linesError = validateJournalLines(lines);
   if (linesError) return res.status(400).json({ message: linesError });
@@ -457,10 +699,13 @@ router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res
       errorMessage = 'All journal lines must reference active accounts in the configured base currency.';
       return null;
     }
-    const compositionError = validateJournalComposition(sourceType, lines, accounts);
-    if (compositionError) {
+    if (responsibleEmployee && !(await User.exists({
+      _id: responsibleEmployee,
+      active: true,
+      role: { $nin: ['pending', 'parent', 'member'] },
+    }).session(session))) {
       errorStatus = 400;
-      errorMessage = compositionError;
+      errorMessage = 'Select an active organization employee.';
       return null;
     }
     const before = {
@@ -469,6 +714,12 @@ router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res
       financialYear: String(found.financialYear),
       description: found.description,
       sourceType: found.sourceType,
+      paymentMethod: found.paymentMethod,
+      counterparty: found.counterparty,
+      responsibleEmployee: found.responsibleEmployee ? String(found.responsibleEmployee) : null,
+      projectReference: found.projectReference,
+      supportingDocumentUrl: found.supportingDocumentUrl,
+      notes: found.notes,
       lines: found.lines.map((line) => ({
         account: String(line.account),
         debitMinor: line.debitMinor,
@@ -483,6 +734,12 @@ router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res
     found.periodId = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
     found.description = description.trim();
     found.sourceType = sourceType;
+    found.paymentMethod = paymentMethod;
+    found.counterparty = counterparty.trim();
+    found.responsibleEmployee = responsibleEmployee || null;
+    found.projectReference = projectReference.trim();
+    found.supportingDocumentUrl = supportingDocumentUrl.trim();
+    found.notes = notes.trim();
     found.currency = currency;
     found.lines = lines.map((line) => ({
       account: line.accountId,
@@ -499,6 +756,12 @@ router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res
         financialYear: String(found.financialYear),
         description: found.description,
         sourceType: found.sourceType,
+        paymentMethod: found.paymentMethod,
+        counterparty: found.counterparty,
+        responsibleEmployee: found.responsibleEmployee ? String(found.responsibleEmployee) : null,
+        projectReference: found.projectReference,
+        supportingDocumentUrl: found.supportingDocumentUrl,
+        notes: found.notes,
         lines: found.lines.map((line) => ({
           account: String(line.account),
           debitMinor: line.debitMinor,
@@ -513,7 +776,7 @@ router.patch('/journal-entries/:id', requireRoles('accountant'), async (req, res
   return res.json({ entry });
 });
 
-router.post('/journal-entries/:id/submit', requireRoles('accountant'), async (req, res) => {
+router.post('/journal-entries/:id/submit', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   let errorStatus = 0;
   let errorMessage = '';
@@ -551,7 +814,7 @@ router.post('/journal-entries/:id/submit', requireRoles('accountant'), async (re
   return res.json({ entry });
 });
 
-router.delete('/journal-entries/:id', requireRoles('accountant'), async (req, res) => {
+router.delete('/journal-entries/:id', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   let errorStatus = 0;
   let errorMessage = '';
@@ -585,7 +848,7 @@ router.delete('/journal-entries/:id', requireRoles('accountant'), async (req, re
   return res.json({ deleted });
 });
 
-router.post('/journal-entries/:id/return', requireRoles('director'), async (req, res) => {
+router.post('/journal-entries/:id/return', requireRoles('director'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
   if (reason.length < 5 || reason.length > 500) {
@@ -629,7 +892,7 @@ router.post('/journal-entries/:id/return', requireRoles('director'), async (req,
   return res.json({ entry });
 });
 
-router.post('/journal-entries/:id/reverse', requireRoles('accountant'), async (req, res) => {
+router.post('/journal-entries/:id/reverse', requireRoles('accountant'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   const { reference, entryDate, financialYearId, description } = req.body || {};
   if (typeof reference !== 'string' || !/^[A-Za-z0-9_-]{2,40}$/.test(reference.trim())
@@ -702,7 +965,7 @@ router.post('/journal-entries/:id/reverse', requireRoles('accountant'), async (r
   return res.status(201).json({ entry: reversal });
 });
 
-router.post('/journal-entries/:id/approve', requireRoles('director'), async (req, res) => {
+router.post('/journal-entries/:id/approve', requireRoles('director'), requireTransactionSupport, async (req, res) => {
   if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ message: 'Journal entry identifier is invalid.' });
   let errorStatus = 0;
   let errorMessage = '';
@@ -763,9 +1026,20 @@ router.post('/journal-entries/:id/approve', requireRoles('director'), async (req
 router.get('/reports', async (req, res) => {
   if (!mongoose.isValidObjectId(req.query.yearId)) return res.status(400).json({ message: 'Select a valid financial year.' });
   const hasMonth = req.query.month !== undefined;
+  const hasDate = req.query.date !== undefined;
+  const hasRange = req.query.from !== undefined || req.query.to !== undefined;
+  if (Number(hasMonth) + Number(hasDate) + Number(hasRange) > 1) {
+    return res.status(400).json({ message: 'Choose a full year, month, day, or custom date range.' });
+  }
   const month = hasMonth ? Number(req.query.month) : undefined;
   if (hasMonth && (!Number.isInteger(month) || month < 1 || month > 12)) {
     return res.status(400).json({ message: 'Reporting month must be between 1 and 12.' });
+  }
+  if (hasDate && !isDateOnly(req.query.date)) {
+    return res.status(400).json({ message: 'Report date must be a valid date in YYYY-MM-DD format.' });
+  }
+  if (hasRange && (!isDateOnly(req.query.from) || !isDateOnly(req.query.to) || req.query.from > req.query.to)) {
+    return res.status(400).json({ message: 'Provide a valid date range using YYYY-MM-DD dates, with the start on or before the end.' });
   }
   let notFound = false;
   let outsideYear = false;
@@ -776,8 +1050,21 @@ router.get('/reports', async (req, res) => {
       notFound = true;
       return null;
     }
-    const period = yearDates(year, month);
+    let period = yearDates(year, month);
+    if (hasDate) {
+      const start = new Date(`${req.query.date}T00:00:00.000Z`);
+      period = { start, end: new Date(`${req.query.date}T23:59:59.999Z`) };
+    } else if (hasRange) {
+      period = {
+        start: new Date(`${req.query.from}T00:00:00.000Z`),
+        end: new Date(`${req.query.to}T23:59:59.999Z`),
+      };
+    }
     if (!period) {
+      outsideYear = true;
+      return null;
+    }
+    if (period.start < year.startDate || period.end > year.endDate) {
       outsideYear = true;
       return null;
     }
@@ -825,7 +1112,7 @@ router.get('/reports', async (req, res) => {
           closingBalanceMinor: safeAdd(openingBalanceMinor, movementMinor),
         };
       });
-    const isAnnual = !hasMonth;
+    const isAnnual = !hasMonth && !hasDate && !hasRange;
     const monthlyTrend = [];
     let comparison = null;
 
@@ -883,10 +1170,15 @@ router.get('/reports', async (req, res) => {
       period: {
         id: hasMonth
           ? `${year.startDate.getUTCFullYear()}-${String(month).padStart(2, '0')}`
-          : `FY-${year.startDate.getUTCFullYear()}`,
+          : hasDate
+            ? req.query.date
+            : hasRange
+              ? `${req.query.from}..${req.query.to}`
+              : `FY-${year.startDate.getUTCFullYear()}`,
         startDate: period.start.toISOString().slice(0, 10),
         endDate: period.end.toISOString().slice(0, 10),
         month: month ?? null,
+        date: hasDate ? req.query.date : null,
       },
       opening: { cashAndBankMinor: opening.cashBankMinor },
       current: {

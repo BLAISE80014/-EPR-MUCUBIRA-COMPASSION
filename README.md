@@ -132,6 +132,20 @@ year (January 1 through December 31); create the initial year (for example,
 2026) and later years separately from the Financial Years panel. Overlapping
 years are rejected, and creating a later year does not modify earlier records.
 
+For the accountant's daily workflow, use `/accountant-dashboard` to see the
+overview, `/accountant/income` to record money received, `/accountant/expense`
+to record money spent, and `/accountant/transactions` to search or export
+transaction history. These simple forms use the existing chart of accounts
+and ledger rules behind the scenes; accountants do not need to enter journal
+lines. Each form creates and immediately posts one balanced income or expense
+entry, so dashboard totals, history, and reports update from the same ledger
+record. Manual journal entries retain the Director review workflow. Every
+daily transaction is recorded with its creating accountant and an audit event.
+The detailed accounting administration remains available to Directors in the
+accounting administration screens and is not removed. Accountants use
+`/accounting` only for financial-year setup and reports; journal entry and
+chart-of-accounts configuration screens are hidden from their daily workflow.
+
 The ledger uses accrual double-entry journal entries. Every journal must
 balance in integer minor units; income, expenses, cash, and bank balances are
 derived only from posted entries. Accountants prepare and submit entries.
@@ -144,8 +158,9 @@ requires all draft and submitted entries to be resolved. Reopening requires a
 Director and a recorded reason. Opening cash and bank balances must be entered
 as a balanced opening-balance journal; the application does not infer them.
 
-For first-time setup, an authorized user creates the 2026 year using
-`2026-01-01` and `2026-12-31`, then initializes the starter chart of accounts.
+For first-time setup, a Director initializes the starter chart of accounts at
+`/accounting/accounts`. An Accountant creates the 2026 year using `2026-01-01`
+and `2026-12-31` from the Financial Years section.
 Review the starter accounts against the organization's approved accounting
 policy before entering live data. Record verified opening balances as a
 balanced `opening_balance` entry. To record a month, prepare income, expense,
@@ -166,8 +181,25 @@ in personal settings is display-only; it does not convert accounting values.
 MongoDB transactions protect ledger writes and their audit records, so the
 MongoDB deployment must support transactions (a replica set or sharded cluster;
 standalone MongoDB is not sufficient for financial writes). For a local
-single-machine database, configure MongoDB as a single-node replica set and
-include its replica-set name in `MONGODB_URI` before creating ledger data.
+single-machine database, the process must start with replica-set name `rs0`.
+If MongoDB is managed by systemd, add this to `/etc/mongod.conf`:
+
+```yaml
+replication:
+  replSetName: rs0
+```
+
+Then restart MongoDB with the appropriate service command, for example
+`sudo systemctl restart mongod`. If MongoDB was started directly as a process,
+stop it cleanly and restart the same command with `--replSet rs0`, preserving
+its existing `--dbpath` and other options. Do not delete the database or use a
+new data directory. Initialize the replica set once in `mongosh` with
+`rs.initiate()`, then set the existing database URI in `server/.env` to include
+`?replicaSet=rs0` (append `&replicaSet=rs0` if it already has query options),
+and restart the API. The Accounting screen displays the detected MongoDB mode
+and disables financial writes until transaction support is available. This
+configuration change preserves the database files but restarts MongoDB and
+temporarily interrupts the API's database connection.
 
 ### Financial API
 
@@ -194,6 +226,18 @@ Authorization is checked by the API, not only by the client.
 | `GET /api/finance/reports?yearId=…&month=1..12` | Calculate a monthly accrual-ledger summary |
 | `GET /api/finance/reports?yearId=…` | Calculate an annual summary and prior-calendar-year comparison, if available |
 | `GET /api/finance/audit-log` | View paginated finance audit events (Director only) |
+| `GET /api/finance/management/assets` | List the asset register and calculate straight-line book values |
+| `POST /api/finance/management/assets` | Register an asset (Accountant only) |
+| `PATCH /api/finance/management/assets/:id` | Update an asset and preserve status history (Accountant only) |
+| `DELETE /api/finance/management/assets/:id` | Delete an asset and record the action in the audit log (Accountant only) |
+| `POST /api/finance/management/assets/:id/maintenance` | Append a non-deletable maintenance record (Accountant only) |
+| `GET /api/finance/management/projects` | List projects with approved budgets and posted journal expenditure |
+| `POST /api/finance/management/projects` | Create a project and budget (Accountant only) |
+| `PATCH /api/finance/management/projects/:id` | Update project and budget details (Accountant only) |
+| `DELETE /api/finance/management/projects/:id` | Delete a project with no posted expenses linked to it (Accountant only) |
+| `GET /api/finance/management/performance?year=…&month=…` | List monthly employee performance records |
+| `PUT /api/finance/management/performance/:employeeId/:year/:month` | Create or update an employee's monthly performance record (Accountant only) |
+| `DELETE /api/finance/management/performance/:id` | Delete a monthly performance record and audit the action (Accountant only) |
 
 Reports distinguish the selected month from year-to-date totals and include
 cash/bank opening, movement, and closing balances. Annual reports contain
@@ -201,12 +245,23 @@ monthly income/expense trends. Transfers between asset accounts do not count
 as income or expense. These are ledger summaries, not a complete statutory
 balance sheet, cash-flow statement, or donor-ready financial report.
 
-The initial finance module does not yet implement separate income/expense
-forms, budgets, asset records or private photo uploads, bank-statement
-reconciliation, report submission/approval, document attachments, or PDF and
-Excel exports. Do not use it as a substitute for those controls or for an
-organization-approved accounting policy. It does not add sample financial
-transactions.
+The Accountant workspace includes an asset register with an optional image,
+source, acquisition and expected end-of-use dates, depreciation estimates,
+asset status and maintenance history; project budgets with an activity,
+timeframe, start/end dates and completion status; monthly employee performance
+with title and sales figures; and view, edit, delete and CSV actions. Asset
+photos and supporting documents currently accept HTTP(S) links; private file
+uploads are not implemented. Asset depreciation is an informational book-value
+calculation and does not create accounting journal entries. Project actuals
+are matched by the project code entered in a journal's project-reference field;
+the reference is not yet a foreign-key selection. Projects with posted expenses
+cannot be deleted so their budget-to-ledger links remain intact.
+
+Separate invoice, bill, customer/supplier, receivables and payment-history
+workflows, bank-statement reconciliation, report approval, secure document
+uploads, and statutory financial statements remain unimplemented. Use the
+ledger under an organization-approved accounting policy. The application does
+not add sample financial transactions.
 
 Before production use, publish organization-approved terms and a privacy notice
 and link them from the registration consent.

@@ -5,6 +5,10 @@ import { AuthProvider } from './auth/AuthContext'
 import { AppLayout } from './components/AppLayout'
 import { AppLoadingError, AppLoadingScreen } from './components/LoadingStates'
 import { HOME_PATH_BY_ROLE } from './auth/roleRoutes'
+import { AccountantDashboardPage } from './pages/AccountantDashboardPage'
+import { AccountantEntryPage } from './pages/AccountantEntryPage'
+import { AccountantOperationsPage } from './pages/AccountantOperationsPage'
+import { AccountantTransactionsPage } from './pages/AccountantTransactionsPage'
 import { AccountingPage } from './pages/AccountingPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DepartmentPage, DirectorModulePage } from './pages/DirectorModulePage'
@@ -94,6 +98,36 @@ function ApplicationRoutes() {
               <DashboardPage />
             </RoleRoute>
           )} />
+          <Route path="accountant-dashboard" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountantDashboardPage />
+            </RoleRoute>
+          )} />
+          <Route path="accountant/income" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountantEntryPage type="income" />
+            </RoleRoute>
+          )} />
+          <Route path="accountant/expense" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountantEntryPage type="expense" />
+            </RoleRoute>
+          )} />
+          <Route path="accountant/transactions" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountantTransactionsPage />
+            </RoleRoute>
+          )} />
+          <Route path="accountant/setup" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountingPage key="accountant-financial-years" initialTab="Financial Years" />
+            </RoleRoute>
+          )} />
+          <Route path="accounting/operations" element={(
+            <RoleRoute roles={['accountant']}>
+              <AccountantOperationsPage />
+            </RoleRoute>
+          )} />
           <Route path="departments" element={(
             <RoleRoute roles={['director']}>
               <DepartmentPage />
@@ -111,7 +145,22 @@ function ApplicationRoutes() {
           )} />
           <Route path="accounting" element={(
             <RoleRoute roles={['director', 'accountant']}>
-              <AccountingPage />
+              <AccountingPage key="accounting-overview" initialTab="Overview" />
+            </RoleRoute>
+          )} />
+          <Route path="accounting/transactions" element={(
+            <RoleRoute roles={['director']}>
+              <AccountingPage key="accounting-journals" initialTab="Journal Entries" />
+            </RoleRoute>
+          )} />
+          <Route path="accounting/accounts" element={(
+            <RoleRoute roles={['director']}>
+              <AccountingPage key="accounting-accounts" initialTab="Chart of Accounts" />
+            </RoleRoute>
+          )} />
+          <Route path="accounting/reports" element={(
+            <RoleRoute roles={['director', 'accountant']}>
+              <AccountingPage key="accounting-reports" initialTab="Reports" />
             </RoleRoute>
           )} />
           <Route path="health" element={(

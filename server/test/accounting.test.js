@@ -4,6 +4,8 @@ const {
   accountBalanceMinor,
   safeAdd,
   summarizePostedEntries,
+  validateJournalMetadata,
+  validateJournalDetails,
   validateJournalComposition,
   validateJournalLines,
   yearDates,
@@ -23,6 +25,35 @@ test('journal validation requires balanced positive integer debits and credits',
     { debitMinor: 0, creditMinor: 1250.5 },
   ]), /whole-minor-unit/);
   assert.match(validateJournalLines([{ debitMinor: 0, creditMinor: 0 }]), /between 2 and 30/);
+});
+
+test('journal metadata validation identifies the exact invalid field', () => {
+  const metadata = {
+    reference: 'EXP-001',
+    entryDate: '2026-10-26',
+    description: 'Office supplies',
+    sourceType: 'expense',
+    currency: 'RWF',
+  };
+  assert.equal(validateJournalMetadata(metadata, 'RWF'), null);
+  assert.match(validateJournalMetadata({ ...metadata, reference: '1' }, 'RWF'), /Reference must be 2-40/);
+  assert.match(validateJournalMetadata({ ...metadata, entryDate: '2026-02-30' }, 'RWF'), /valid entry date/);
+  assert.match(validateJournalMetadata({ ...metadata, description: 'ab' }, 'RWF'), /Description must be/);
+  assert.match(validateJournalMetadata({ ...metadata, sourceType: 'other' }, 'RWF'), /valid source type/);
+  assert.match(validateJournalMetadata({ ...metadata, currency: '' }, 'RWF'), /configured base currency \(RWF\)/);
+});
+
+test('journal transaction details validate payment methods and supporting links', () => {
+  assert.equal(validateJournalDetails({
+    paymentMethod: 'mobile_money',
+    counterparty: 'Partner',
+    projectReference: 'WASH-26',
+    supportingDocumentUrl: 'https://example.org/receipt',
+    notes: 'Receipt verified',
+  }), null);
+  assert.match(validateJournalDetails({ paymentMethod: 'crypto' }), /valid payment method/);
+  assert.match(validateJournalDetails({ supportingDocumentUrl: 'javascript:alert(1)' }), /valid HTTPS or HTTP link/);
+  assert.match(validateJournalDetails({ notes: 'x'.repeat(501) }), /500 characters or fewer/);
 });
 
 test('income, expense, and transfer journals use accounting-appropriate accounts', () => {
