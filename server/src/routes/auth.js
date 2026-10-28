@@ -80,6 +80,22 @@ function publicParentRegistration({ name, email, phone, passwordHash }) {
   };
 }
 
+async function verifyLoginPassword(user, password) {
+  if (user.passwordHash && await bcrypt.compare(password, user.passwordHash)) {
+    return true;
+  }
+
+  if (typeof user.password === 'string' && user.password.length > 0 && user.password === password) {
+    const legacyPassword = user.password;
+    user.passwordHash = await bcrypt.hash(legacyPassword, 12);
+    user.password = undefined;
+    await user.save();
+    return true;
+  }
+
+  return false;
+}
+
 router.post('/register', registrationRateLimit, async (req, res) => {
   const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
   const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
@@ -150,8 +166,8 @@ router.post('/login', loginRateLimit, async (req, res) => {
     return res.status(400).json({ message: 'Choose a valid account type.' });
   }
 
-  const user = await User.findOne({ email }).select('+passwordHash');
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+  const user = await User.findOne({ email }).select('+passwordHash +password');
+  if (!user || !(await verifyLoginPassword(user, password))) {
     return res.status(401).json({ message: 'Email or password is incorrect.' });
   }
   if (user.role === 'pending') {

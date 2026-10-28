@@ -522,6 +522,46 @@ test('valid login honors Remember me and returns a safe member profile', async (
   }
 });
 
+test('legacy plain-text passwords are accepted once and migrated to a bcrypt hash', async () => {
+  const originalFindOne = User.findOne;
+  const user = {
+    _id: { toString: () => '507f1f77bcf86cd799439022' },
+    name: 'Legacy User',
+    email: 'legacy@example.org',
+    password: 'LegacyPassword123!',
+    role: 'member',
+    department: 'community',
+    groupIds: [],
+    active: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    async save() {
+      if (this.password) {
+        this.passwordHash = await bcrypt.hash(this.password, 12);
+        this.password = undefined;
+      }
+    },
+  };
+  User.findOne = () => ({ select: async () => user });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: user.email,
+        password: 'LegacyPassword123!',
+        accountType: 'member',
+      }),
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(user.password, undefined);
+    assert.equal(await bcrypt.compare('LegacyPassword123!', user.passwordHash), true);
+  } finally {
+    User.findOne = originalFindOne;
+  }
+});
+
 test('authenticated profile updates validate fields and return the saved account details', async () => {
   const originalFindById = User.findById;
   const user = {
