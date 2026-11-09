@@ -52,6 +52,29 @@ service is unavailable, start MongoDB, verify `server/.env` has a reachable
 The Director seed command creates an account only when its email does not
 already exist. It does not reset or overwrite existing users.
 
+### Deploying the frontend and API to Vercel
+
+The Vercel deployment serves both the Vite frontend and the Express API. In the
+Vercel project settings, set **Root Directory** to the repository root (not
+`client`). The root `vercel.json` builds the frontend and routes `/api/*` to a
+serverless function that connects to MongoDB.
+
+Configure these Vercel environment variables for Production and Preview:
+
+- `MONGODB_URI`: the MongoDB connection string for the shared application data.
+- `JWT_SECRET`: a private, unique secret of at least 32 bytes.
+- `CLIENT_ORIGIN`: `https://compassion-mucubira-uln4.vercel.app`.
+- `ALLOWED_ORIGINS`: optional comma-separated frontend origins, including
+  `http://localhost:5173` if local frontend development should use this API.
+- `ACCOUNTING_BASE_CURRENCY`: optional; defaults to `RWF`.
+
+Add SMTP variables (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`,
+`SMTP_PASSWORD`, and `MAIL_FROM`) if password-reset email is required. Do not
+put these values in Vite/client environment variables. Redeploy after setting
+the Root Directory and environment variables. Verify
+`https://compassion-mucubira-uln4.vercel.app/api/health` reports a connected
+database before testing sign-in.
+
 ## Account registration and access
 
 Open `http://localhost:5173/signup` to create a Parent account. Registration

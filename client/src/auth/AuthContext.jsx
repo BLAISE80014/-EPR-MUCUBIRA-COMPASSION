@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { apiRequest } from '../lib/api'
 
 const AuthContext = createContext(null)
-const SESSION_REQUEST_TIMEOUT_MS = 4000
+const SESSION_REQUEST_TIMEOUT_MS = 15000
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
       }
       if (!signal.aborted || didTimeout()) {
         const message = didTimeout()
-          ? 'The server is taking too long to respond. Check that the backend and database are running, then retry.'
+          ? 'The server is taking too long to respond. Check the Vercel API deployment and database connection, then retry.'
           : error.message
         setSessionError(message)
         console.error('Unable to restore the current session:', error)

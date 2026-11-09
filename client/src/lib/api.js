@@ -6,7 +6,7 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 4000
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000
 
 export async function apiRequest(path, options = {}) {
   const {
@@ -61,13 +61,13 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     const message = result?.message
       || (response.status >= 500
-        ? 'The API is unavailable. Start the backend and MongoDB, then check http://localhost:5000/api/health for a connected status.'
+        ? 'The API is unavailable. Check the Vercel API deployment and database configuration.'
         : `Request failed with status ${response.status}.`)
     throw new ApiError(message, response.status)
   }
 
   if (result === null) {
-    throw new ApiError('The API returned an unexpected response. Check that the backend is running.', response.status)
+    throw new ApiError('The API returned an unexpected response. Check the Vercel API deployment.', response.status)
   }
 
   return result

@@ -1,9 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://compassion-mucubira-uln4.vercel.app/api/:path*"
-    }
-  ]
-}
