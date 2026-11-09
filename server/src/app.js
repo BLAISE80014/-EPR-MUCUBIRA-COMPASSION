@@ -14,6 +14,23 @@ function isUnsupportedMongoTransaction(error) {
     && /transaction numbers are only allowed on a replica set member or mongos/i.test(error.message || '');
 }
 
+function parseAllowedOrigins(value) {
+  const entries = Array.isArray(value) ? value : String(value || '').split(',');
+  const origins = entries
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      try {
+        return new URL(entry).origin;
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  return [...new Set(origins)];
+}
+
 function createApp(config) {
   if (!config?.jwtSecret || Buffer.byteLength(config.jwtSecret, 'utf8') < 32) {
     throw new Error('A JWT secret of at least 32 bytes is required.');
@@ -32,23 +49,32 @@ function createApp(config) {
     throw new Error('Accounting base currency must be a supported ISO currency code.');
   }
 
-  const configuredOrigin = new URL(config.clientOrigin || 'http://localhost:5173');
-  const clientOrigin = configuredOrigin.origin;
-  const allowedOrigins = new Set([configuredOrigin.origin]);
-  if (process.env.NODE_ENV !== 'production') {
-    if (configuredOrigin.hostname === 'localhost') {
-      configuredOrigin.hostname = '127.0.0.1';
-      allowedOrigins.add(configuredOrigin.origin);
-    } else if (configuredOrigin.hostname === '127.0.0.1') {
-      configuredOrigin.hostname = 'localhost';
-      allowedOrigins.add(configuredOrigin.origin);
+  const requestedOrigins = parseAllowedOrigins(config.clientOrigins || config.clientOrigin || process.env.ALLOWED_ORIGINS || process.env.CLIENT_ORIGIN || 'http://localhost:5173');
+  const primaryOrigin = requestedOrigins[0] || 'http://localhost:5173';
+  const allowedOrigins = new Set(requestedOrigins);
+  for (const origin of [...allowedOrigins]) {
+    const parsed = new URL(origin);
+    if (parsed.hostname === 'localhost') {
+      const localIp = new URL(origin);
+      localIp.hostname = '127.0.0.1';
+      allowedOrigins.add(localIp.origin);
+    } else if (parsed.hostname === '127.0.0.1') {
+      const localHost = new URL(origin);
+      localHost.hostname = 'localhost';
+      allowedOrigins.add(localHost.origin);
     }
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    allowedOrigins.add('http://localhost:5173');
+    allowedOrigins.add('http://127.0.0.1:5173');
+    allowedOrigins.add('http://localhost:3000');
+    allowedOrigins.add('http://127.0.0.1:3000');
   }
   const app = express();
 
   app.locals.jwtSecret = config.jwtSecret;
   app.locals.production = process.env.NODE_ENV === 'production';
-  app.locals.clientOrigin = clientOrigin;
+  app.locals.clientOrigin = primaryOrigin;
   app.locals.accountingCurrency = accountingCurrency;
   app.locals.accountingCurrencyDigits = accountingCurrencyDigits;
   app.locals.sendPasswordResetEmail = config.sendPasswordResetEmail

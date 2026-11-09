@@ -17,6 +17,9 @@ server can run the rest of the application but cannot safely write ledger data.
    For local accounting development, run MongoDB as a single-node replica set,
    initialize it once with `rs.initiate()` in `mongosh`, and use a URI such as
    `mongodb://127.0.0.1:27017/epr-mucubira-compassion?replicaSet=rs0`.
+   To allow both localhost and a deployed frontend, set `CLIENT_ORIGIN` to your
+   main frontend and optionally add a comma-separated `ALLOWED_ORIGINS` list,
+   for example `http://localhost:5173,https://app.example.com`.
 3. Install the backend dependencies, create the Director account, and start the
    API:
 

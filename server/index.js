@@ -17,10 +17,17 @@ function getRequiredEnvironment() {
     throw new Error('JWT_SECRET must contain at least 32 bytes.');
   }
 
+  const configuredOrigins = [
+    process.env.CLIENT_ORIGIN,
+    process.env.ALLOWED_ORIGINS,
+  ].filter(Boolean);
+  const primaryClientOrigin = configuredOrigins.flatMap((value) => String(value).split(',')).map((value) => value.trim()).filter(Boolean)[0] || 'http://localhost:5173';
+
   return {
     mongoUri: process.env.MONGODB_URI,
     jwtSecret: process.env.JWT_SECRET,
-    clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    clientOrigin: primaryClientOrigin,
+    clientOrigins: configuredOrigins.flatMap((value) => String(value).split(',')).map((value) => value.trim()).filter(Boolean),
     accountingCurrency: process.env.ACCOUNTING_BASE_CURRENCY || 'RWF',
     smtp: {
       host: process.env.SMTP_HOST,
